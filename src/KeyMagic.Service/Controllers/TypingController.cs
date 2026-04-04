@@ -57,18 +57,8 @@ public class TypingController : ControllerBase
             request.Source,
             request.Text ?? string.Empty,
             request.Name ?? string.Empty,
-            request.InterKeyDelayMs ?? 30);
-
-        // Apply enabled state if explicitly provided (default = true).
-        if (request.Enabled.HasValue && !request.Enabled.Value)
-        {
-            _configStore.Update(c =>
-            {
-                var r = c.TypingRules.Find(x => x.Id == rule.Id);
-                if (r != null) r.Enabled = false;
-            });
-            rule.Enabled = false;
-        }
+            request.InterKeyDelayMs ?? 30,
+            request.Enabled ?? true);
 
         return CreatedAtAction(nameof(GetById), new { id = rule.Id }, rule);
     }

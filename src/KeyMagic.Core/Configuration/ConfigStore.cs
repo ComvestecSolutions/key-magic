@@ -36,7 +36,7 @@ public class ConfigStore
 
     public KeyMagicConfig Config
     {
-        get { lock (_lock) return _config; }
+        get { lock (_lock) return _config.Clone(); }
     }
 
     /// <summary>
@@ -49,7 +49,8 @@ public class ConfigStore
     {
         lock (_lock)
         {
-            return (_config.GlobalEnabled, _config.Rules.ToList(), _config.LogPassThrough);
+            var snapshot = _config.Clone();
+            return (snapshot.GlobalEnabled, snapshot.Rules, snapshot.LogPassThrough);
         }
     }
 
@@ -60,7 +61,7 @@ public class ConfigStore
         lock (_lock)
         {
             _config = Load();
-            snapshot = _config;
+            snapshot = _config.Clone();
         }
         ConfigChanged?.Invoke(snapshot);
         return snapshot;
@@ -71,12 +72,7 @@ public class ConfigStore
     {
         lock (_lock)
         {
-            var dir = Path.GetDirectoryName(_configPath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
-
-            var json = JsonSerializer.Serialize(_config, JsonOptions);
-            File.WriteAllText(_configPath, json);
+            SaveConfigUnsafe(_config);
         }
     }
 
@@ -87,8 +83,8 @@ public class ConfigStore
         lock (_lock)
         {
             updater(_config);
-            Save();
-            snapshot = _config;
+            SaveConfigUnsafe(_config);
+            snapshot = _config.Clone();
         }
         ConfigChanged?.Invoke(snapshot);
     }
@@ -135,7 +131,7 @@ public class ConfigStore
 
     /// <summary>Adds a new typing rule and persists the config.</summary>
     public TypingRule AddTypingRule(ShortcutKey hotkey, TextSource source, string text,
-        string name, int interKeyDelayMs = 30)
+        string name, int interKeyDelayMs = 30, bool enabled = true)
     {
         var rule = new TypingRule
         {
@@ -143,7 +139,8 @@ public class ConfigStore
             Hotkey = hotkey,
             Source = source,
             Text = text,
-            InterKeyDelayMs = interKeyDelayMs
+            InterKeyDelayMs = interKeyDelayMs,
+            Enabled = enabled
         };
         Update(c => c.TypingRules.Add(rule));
         return rule;
@@ -198,7 +195,8 @@ public class ConfigStore
         try
         {
             var json = File.ReadAllText(_configPath);
-            return JsonSerializer.Deserialize<KeyMagicConfig>(json, JsonOptions) ?? CreateDefaultConfig();
+            var config = JsonSerializer.Deserialize<KeyMagicConfig>(json, JsonOptions);
+            return NormalizeConfig(config ?? CreateDefaultConfig());
         }
         catch (Exception ex)
         {
@@ -209,37 +207,51 @@ public class ConfigStore
 
     private static KeyMagicConfig CreateDefaultConfig()
     {
-        return new KeyMagicConfig
+        return KeyMagicConfig.CreateDefault();
+    }
+
+    private void SaveConfigUnsafe(KeyMagicConfig config)
+    {
+        var dir = Path.GetDirectoryName(_configPath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            Directory.CreateDirectory(dir);
+
+        var json = JsonSerializer.Serialize(config, JsonOptions);
+        var tempDirectory = string.IsNullOrEmpty(dir) ? Directory.GetCurrentDirectory() : dir;
+        var tempPath = Path.Combine(tempDirectory, $"{Path.GetFileName(_configPath)}.{Guid.NewGuid():N}.tmp");
+
+        File.WriteAllText(tempPath, json);
+
+        try
         {
-            GlobalEnabled = false,
-            Rules = new List<BlockingRule>
+            if (File.Exists(_configPath))
             {
-                new()
-                {
-                    Shortcut = new ShortcutKey
-                    {
-                        DisplayName = "Alt+Tab",
-                        VirtualKeyCode = 0x09, // VK_TAB
-                        Alt = true
-                    },
-                    TargetProcesses = new List<string>(),
-                    Enabled = false,
-                    Description = "Block Alt+Tab (example : disabled by default)"
-                },
-                new()
-                {
-                    Shortcut = new ShortcutKey
-                    {
-                        DisplayName = "Ctrl+W",
-                        VirtualKeyCode = 0x57, // VK_W
-                        Ctrl = true
-                    },
-                    TargetProcesses = new List<string> { "chrome", "msedge", "firefox" },
-                    Enabled = false,
-                    Description = "Prevent accidental tab close in browsers"
-                }
+                File.Replace(tempPath, _configPath, null);
             }
-        };
+            else
+            {
+                File.Move(tempPath, _configPath);
+            }
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    private static KeyMagicConfig NormalizeConfig(KeyMagicConfig config)
+    {
+        var defaults = KeyMagicConfig.CreateDefault();
+
+        config.Rules ??= defaults.Rules.Select(rule => rule.Clone()).ToList();
+        config.Profiles ??= defaults.Profiles.ToDictionary(entry => entry.Key, entry => new List<string>(entry.Value));
+        config.TypingRules ??= new List<TypingRule>();
+        config.ActiveProfile ??= defaults.ActiveProfile;
+
+        return config;
     }
 
     private static string GetDefaultConfigPath()

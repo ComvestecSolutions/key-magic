@@ -43,7 +43,7 @@ public class TesterForm : Form
     private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string lpModuleName);
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
 
     [DllImport("user32.dll")]
     private static extern short GetKeyState(int nVirtKey);
@@ -251,8 +251,8 @@ public class TesterForm : Form
     private void InstallHook()
     {
         using var curProcess = Process.GetCurrentProcess();
-        using var curModule = curProcess.MainModule!;
-        _hookId = SetWindowsHookEx(WH_KEYBOARD_LL, _proc, GetModuleHandle(curModule.ModuleName!), 0);
+        using var curModule = curProcess.MainModule;
+        _hookId = SetWindowsHookEx(WH_KEYBOARD_LL, _proc, GetModuleHandle(curModule?.ModuleName), 0);
         if (_hookId == IntPtr.Zero)
             MessageBox.Show("Failed to install keyboard hook!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
@@ -288,39 +288,19 @@ public class TesterForm : Form
                     bool win = (GetKeyState(0x5B) & 0x8000) != 0 || (GetKeyState(0x5C) & 0x8000) != 0;
                     bool alt = (hs.flags & LLKHF_ALTDOWN) != 0 || (GetKeyState(0x12) & 0x8000) != 0;
 
-                    string processName = "";
-                    string windowTitle = "";
-                    try
-                    {
-                        var hwnd = GetForegroundWindow();
-                        if (hwnd != IntPtr.Zero)
-                        {
-                            GetWindowThreadProcessId(hwnd, out uint pid);
-                            using var proc = Process.GetProcessById((int)pid);
-                            processName = proc.ProcessName;
-                            var sb = new System.Text.StringBuilder(256);
-                            GetWindowText(hwnd, sb, sb.Capacity);
-                            windowTitle = sb.ToString();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // Process may have exited between the foreground query and GetProcessById
-                        Debug.WriteLine($"[Tester] Could not get foreground process info: {ex.Message}");
-                    }
-
-                    // Build display name
-                    var parts = new List<string>();
-                    if (ctrl) parts.Add("Ctrl");
-                    if (alt) parts.Add("Alt");
-                    if (shift) parts.Add("Shift");
-                    if (win) parts.Add("Win");
-                    parts.Add(VkName(hs.vkCode));
-                    var combo = string.Join(" + ", parts);
-                    var type = isDown ? "DOWN" : " UP ";
-
                     BeginInvoke(() =>
                     {
+                        var (processName, windowTitle) = GetForegroundInfo();
+
+                        var parts = new List<string>();
+                        if (ctrl) parts.Add("Ctrl");
+                        if (alt) parts.Add("Alt");
+                        if (shift) parts.Add("Shift");
+                        if (win) parts.Add("Win");
+                        parts.Add(VkName(hs.vkCode));
+                        var combo = string.Join(" + ", parts);
+                        var type = isDown ? "DOWN" : " UP ";
+
                         if (isDown)
                         {
                             _comboLabel.Text = combo;
@@ -363,6 +343,30 @@ public class TesterForm : Form
         }
 
         return CallNextHookEx(_hookId, nCode, wParam, lParam);
+    }
+
+    private static (string processName, string windowTitle) GetForegroundInfo()
+    {
+        try
+        {
+            var hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero)
+            {
+                return (string.Empty, string.Empty);
+            }
+
+            GetWindowThreadProcessId(hwnd, out uint pid);
+            using var proc = Process.GetProcessById((int)pid);
+
+            var sb = new System.Text.StringBuilder(256);
+            GetWindowText(hwnd, sb, sb.Capacity);
+            return (proc.ProcessName, sb.ToString());
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Tester] Could not get foreground process info: {ex.Message}");
+            return (string.Empty, string.Empty);
+        }
     }
 
     private void UpdateStatus()

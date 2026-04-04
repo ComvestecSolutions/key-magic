@@ -39,7 +39,7 @@ export function getVirtualKeyCode(value: string): number | null {
   }
 
   const lowered = normalized.toLowerCase();
-  if (lowered in specialKeyCodes) {
+  if (Object.prototype.hasOwnProperty.call(specialKeyCodes, lowered)) {
     return specialKeyCodes[lowered];
   }
 

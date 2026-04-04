@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { ProcessInfo } from '../app/types'
 
 interface ProcessSelectorProps {
@@ -9,6 +9,7 @@ interface ProcessSelectorProps {
 
 export function ProcessSelector({ availableProcesses, selected, onChange }: ProcessSelectorProps) {
   const [inputValue, setInputValue] = useState('')
+  const listId = useId()
 
   const options = availableProcesses
     .map((processInfo) => processInfo.processName)
@@ -30,7 +31,7 @@ export function ProcessSelector({ availableProcesses, selected, onChange }: Proc
     <div className="process-selector">
       <div className="process-selector__input-row">
         <input
-          list="process-options"
+          list={listId}
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}
           placeholder="Add a process name or leave empty for global scope"
@@ -39,7 +40,7 @@ export function ProcessSelector({ availableProcesses, selected, onChange }: Proc
           Add
         </button>
       </div>
-      <datalist id="process-options">
+      <datalist id={listId}>
         {options.map((option) => (
           <option key={option} value={option} />
         ))}

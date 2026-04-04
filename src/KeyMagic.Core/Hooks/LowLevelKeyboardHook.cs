@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using KeyMagic.Core.Interop;
 using Microsoft.Extensions.Logging;
 
 namespace KeyMagic.Core.Hooks;
@@ -55,19 +56,10 @@ public class LowLevelKeyboardHook : IDisposable
     private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string lpModuleName);
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
 
     [DllImport("user32.dll")]
     private static extern short GetKeyState(int nVirtKey);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct KBDLLHOOKSTRUCT
@@ -117,11 +109,16 @@ public class LowLevelKeyboardHook : IDisposable
         if (_hookId != IntPtr.Zero) return;
 
         using var curProcess = Process.GetCurrentProcess();
-        using var curModule = curProcess.MainModule!;
+        using var curModule = curProcess.MainModule;
+        if (curModule == null)
+        {
+            _logger?.LogWarning("Current process main module was unavailable while installing the keyboard hook; falling back to the current process module handle.");
+        }
+
         _hookId = SetWindowsHookEx(
             WH_KEYBOARD_LL,
             _proc,
-            GetModuleHandle(curModule.ModuleName!),
+            GetModuleHandle(curModule?.ModuleName),
             0);
 
         if (_hookId == IntPtr.Zero)
@@ -184,9 +181,9 @@ public class LowLevelKeyboardHook : IDisposable
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Swallow — never let an exception escape the hook callback.
+            _logger?.LogDebug(ex, "Exception in keyboard hook callback");
         }
 
         // Always pass through — never suppress keystrokes
@@ -203,30 +200,14 @@ public class LowLevelKeyboardHook : IDisposable
     /// </summary>
     private (string processName, string windowTitle) GetForegroundInfo()
     {
-        var hwnd = GetForegroundWindow();
+        var hwnd = Win32Interop.GetForegroundWindowHandle();
         if (hwnd == IntPtr.Zero)
             return (string.Empty, string.Empty);
 
         if (hwnd == _cachedFgHwnd)
             return (_cachedProcessName, _cachedWindowTitle);
 
-        string processName = string.Empty;
-        string windowTitle = string.Empty;
-        try
-        {
-            GetWindowThreadProcessId(hwnd, out uint pid);
-            using var proc = Process.GetProcessById((int)pid);
-            processName = proc.ProcessName;
-
-            var sb = new System.Text.StringBuilder(256);
-            GetWindowText(hwnd, sb, sb.Capacity);
-            windowTitle = sb.ToString();
-        }
-        catch (Exception ex)
-        {
-            // Process may have exited between calls
-            _logger?.LogDebug(ex, "Could not get foreground process info");
-        }
+        var (processName, windowTitle) = Win32Interop.GetWindowInfo(hwnd, _logger);
 
         _cachedFgHwnd = hwnd;
         _cachedProcessName = processName;

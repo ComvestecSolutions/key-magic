@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from 'react'
+import { startTransition, useEffect, useRef, useState } from 'react'
 import { api } from './api'
 import type { CreateBlockingRuleInput, CreateTypingRuleInput, DashboardSnapshot, SettingsUpdateInput, TypingRule } from './types'
 import { EventLogPanel } from '../features/events/EventLogPanel'
@@ -10,35 +10,61 @@ import { TypingRulesPanel } from '../features/typing/TypingRulesPanel'
 export function App() {
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>('Local dashboard connected to the Key Magic service API.')
+  const latestRefreshId = useRef(0)
 
   useEffect(() => {
     void refreshDashboard(true)
   }, [])
 
   async function refreshDashboard(showLoadingState = false) {
+    const refreshId = ++latestRefreshId.current
+
     if (showLoadingState) {
       setLoading(true)
+    } else {
+      setRefreshing(true)
     }
 
     try {
       const snapshot = await api.getDashboard()
+
+      if (refreshId !== latestRefreshId.current) {
+        return
+      }
+
       startTransition(() => {
         setDashboard(snapshot)
         setError(null)
       })
     } catch (refreshError) {
+      if (refreshId !== latestRefreshId.current) {
+        return
+      }
+
       setError(refreshError instanceof Error ? refreshError.message : 'Unable to load dashboard data.')
     } finally {
+      if (refreshId !== latestRefreshId.current) {
+        return
+      }
+
       if (showLoadingState) {
         setLoading(false)
+      } else {
+        setRefreshing(false)
       }
     }
   }
 
-  async function runMutation(label: string, action: () => Promise<unknown>, successMessage: string) {
+  async function runMutation(
+    label: string,
+    action: () => Promise<unknown>,
+    successMessage: string,
+    options?: { rethrowOnError?: boolean },
+  ) {
     setBusyLabel(label)
     setError(null)
 
@@ -48,13 +74,17 @@ export function App() {
       await refreshDashboard(false)
     } catch (mutationError) {
       setError(mutationError instanceof Error ? mutationError.message : `${label} failed.`)
+
+      if (options?.rethrowOnError) {
+        throw mutationError
+      }
     } finally {
       setBusyLabel(null)
     }
   }
 
   async function handleCreateRule(input: CreateBlockingRuleInput) {
-    await runMutation('Creating blocking rule', () => api.createRule(input), `Added blocking rule ${input.displayName}.`)
+    await runMutation('Creating blocking rule', () => api.createRule(input), `Added blocking rule ${input.displayName}.`, { rethrowOnError: true })
   }
 
   async function handleToggleRule(id: string) {
@@ -66,7 +96,7 @@ export function App() {
   }
 
   async function handleCreateTypingRule(input: CreateTypingRuleInput) {
-    await runMutation('Creating typing rule', () => api.createTypingRule(input), `Added typing rule ${input.name}.`)
+    await runMutation('Creating typing rule', () => api.createTypingRule(input), `Added typing rule ${input.name}.`, { rethrowOnError: true })
   }
 
   async function handleToggleTypingRule(id: string) {
@@ -93,7 +123,7 @@ export function App() {
   }
 
   async function handleSaveSettings(input: SettingsUpdateInput) {
-    await runMutation('Saving settings', () => api.updateSettings(input), 'Saved dashboard settings.')
+    await runMutation('Saving settings', () => api.updateSettings(input), 'Saved dashboard settings.', { rethrowOnError: true })
   }
 
   async function handleToggleGlobal() {
@@ -127,7 +157,7 @@ export function App() {
     )
   }
 
-  const busy = loading || busyLabel !== null
+  const busy = loading || refreshing || busyLabel !== null
 
   return (
     <div className="app-shell">
@@ -151,7 +181,7 @@ export function App() {
           </div>
           <div className="sidebar-panel">
             <span>Runtime</span>
-            <strong>{busyLabel ?? 'Idle'}</strong>
+            <strong>{busyLabel ?? (refreshing ? 'Refreshing dashboard' : 'Idle')}</strong>
             <small>{dashboard.status.hookActive ? 'Keyboard hook is active.' : 'Keyboard hook is currently inactive.'}</small>
           </div>
         </div>

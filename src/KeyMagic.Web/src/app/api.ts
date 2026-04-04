@@ -11,13 +11,31 @@ import type {
   TypingRule,
 } from "./types";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+let adminToken: string | null = null;
+
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T | undefined> {
+  const method = init?.method?.toUpperCase() ?? "GET";
+  const requiresAdminToken = !["GET", "HEAD", "OPTIONS"].includes(method);
+
+  if (requiresAdminToken && adminToken === null) {
+    throw new Error(
+      "Dashboard session token is unavailable. Refresh the page and try again.",
+    );
+  }
+
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+
+  if (requiresAdminToken && adminToken !== null) {
+    headers.set("X-Admin-Token", adminToken);
+  }
+
   const response = await fetch(path, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
 
   if (!response.ok) {
@@ -39,73 +57,91 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+async function requestRequired<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const result = await request<T>(path, init);
+  if (result === undefined) {
+    throw new Error(`Expected a response body from ${path}.`);
+  }
+
+  return result;
+}
+
+async function requestVoid(path: string, init?: RequestInit): Promise<void> {
+  await request(path, init);
+}
+
 export const api = {
   async getDashboard(): Promise<DashboardSnapshot> {
     const [status, stats, rules, typingRules, events, processes] =
       await Promise.all([
-        request<StatusSnapshot>("/api/status"),
-        request<StatusStats>("/api/status/stats"),
-        request<BlockingRule[]>("/api/rules"),
-        request<TypingRule[]>("/api/typing"),
-        request<ShortcutEvent[]>("/api/status/events?limit=100"),
-        request<ProcessInfo[]>("/api/processes"),
+        requestRequired<StatusSnapshot>("/api/status"),
+        requestRequired<StatusStats>("/api/status/stats"),
+        requestRequired<BlockingRule[]>("/api/rules"),
+        requestRequired<TypingRule[]>("/api/typing"),
+        requestRequired<ShortcutEvent[]>("/api/status/events?limit=100"),
+        requestRequired<ProcessInfo[]>("/api/processes"),
       ]);
+
+    adminToken = status.adminToken;
 
     return { status, stats, rules, typingRules, events, processes };
   },
 
   toggleGlobal(): Promise<{ globalEnabled: boolean }> {
-    return request("/api/status/toggle", { method: "POST" });
+    return requestRequired("/api/status/toggle", { method: "POST" });
   },
 
   updateSettings(input: SettingsUpdateInput): Promise<{ success: boolean }> {
-    return request("/api/status/settings", {
+    return requestRequired("/api/status/settings", {
       method: "PUT",
       body: JSON.stringify(input),
     });
   },
 
   createRule(input: CreateBlockingRuleInput): Promise<BlockingRule> {
-    return request("/api/rules", {
+    return requestRequired("/api/rules", {
       method: "POST",
       body: JSON.stringify(input),
     });
   },
 
   toggleRule(id: string): Promise<{ id: string; enabled: boolean }> {
-    return request(`/api/rules/${id}/toggle`, { method: "POST" });
+    return requestRequired(`/api/rules/${id}/toggle`, { method: "POST" });
   },
 
   deleteRule(id: string): Promise<void> {
-    return request(`/api/rules/${id}`, { method: "DELETE" });
+    return requestVoid(`/api/rules/${id}`, { method: "DELETE" });
   },
 
   createTypingRule(input: CreateTypingRuleInput): Promise<TypingRule> {
-    return request("/api/typing", {
+    return requestRequired("/api/typing", {
       method: "POST",
       body: JSON.stringify(input),
     });
   },
 
   toggleTypingRule(id: string): Promise<{ id: string; enabled: boolean }> {
-    return request(`/api/typing/${id}/toggle`, { method: "POST" });
+    return requestRequired(`/api/typing/${id}/toggle`, { method: "POST" });
   },
 
   deleteTypingRule(id: string): Promise<void> {
-    return request(`/api/typing/${id}`, { method: "DELETE" });
+    return requestVoid(`/api/typing/${id}`, { method: "DELETE" });
   },
 
   fireTypingRule(
     id: string,
     body: { text?: string; preDelayMs?: number },
   ): Promise<{ queued: boolean }> {
-    return request(`/api/typing/${id}/fire`, {
+    return requestRequired(`/api/typing/${id}/fire`, {
       method: "POST",
       body: JSON.stringify(body),
     });
   },
 
   clearEvents(): Promise<void> {
-    return request("/api/status/events", { method: "DELETE" });
+    return requestVoid("/api/status/events", { method: "DELETE" });
   },
 };

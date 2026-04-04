@@ -1,5 +1,6 @@
 using KeyMagic.Core.Configuration;
 using KeyMagic.Core.Services;
+using KeyMagic.Service.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 
@@ -14,27 +15,29 @@ public class StatusController : ControllerBase
 {
     private readonly ConfigStore _configStore;
     private readonly ShortcutBlockingService _blockingService;
+    private readonly DashboardMutationProtector _mutationProtector;
 
-    public StatusController(ConfigStore configStore, ShortcutBlockingService blockingService)
+    public StatusController(
+        ConfigStore configStore,
+        ShortcutBlockingService blockingService,
+        DashboardMutationProtector mutationProtector)
     {
         _configStore = configStore;
         _blockingService = blockingService;
+        _mutationProtector = mutationProtector;
     }
 
     /// <summary>GET /api/status : overall system status</summary>
     [HttpGet]
     public ActionResult GetStatus()
     {
-        // Take a thread-safe snapshot so background config changes don't cause
-        // a concurrent-modification exception while we iterate Rules.
-        var (globalEnabled, rules, _) = _configStore.GetBlockingSnapshot();
         var config = _configStore.Config;
         return Ok(new
         {
-            globalEnabled,
+            globalEnabled = config.GlobalEnabled,
             hookActive = _blockingService.IsRunning,
-            totalRules = rules.Count,
-            activeRules = rules.Count(r => r.Enabled),
+            totalRules = config.Rules.Count,
+            activeRules = config.Rules.Count(r => r.Enabled),
             showNotifications = config.ShowNotifications,
             trayIconVisible = config.TrayIconVisible,
             logPassThrough = config.LogPassThrough,
@@ -46,7 +49,8 @@ public class StatusController : ControllerBase
             profiles = config.Profiles.Keys.ToList(),
             notificationSound = config.NotificationSound,
             notificationDurationMs = config.NotificationDurationMs,
-            webDashboardPort = config.WebDashboardPort
+            webDashboardPort = config.WebDashboardPort,
+            adminToken = _mutationProtector.AdminToken
         });
     }
 
@@ -113,21 +117,25 @@ public class StatusController : ControllerBase
         if (config.WebDashboardPort is < 1024 or > 65535)
             return BadRequest(new { error = "WebDashboardPort must be between 1024 and 65535." });
 
+        var imported = config.Clone();
+
         _configStore.Update(c =>
         {
-            c.GlobalEnabled = config.GlobalEnabled;
-            c.Rules = config.Rules;
-            c.ShowNotifications = config.ShowNotifications;
-            c.TrayIconVisible = config.TrayIconVisible;
-            c.LogPassThrough = config.LogPassThrough;
-            c.AllowSingleKeyBlocking = config.AllowSingleKeyBlocking;
-            c.MaxLogEntries = config.MaxLogEntries;
-            c.StartWithWindows = config.StartWithWindows;
-            c.StartEnabled = config.StartEnabled;
-            c.ActiveProfile = config.ActiveProfile;
-            c.Profiles = config.Profiles;
-            c.NotificationSound = config.NotificationSound;
-            c.NotificationDurationMs = config.NotificationDurationMs;
+            c.GlobalEnabled = imported.GlobalEnabled;
+            c.Rules = imported.Rules;
+            c.WebDashboardPort = imported.WebDashboardPort;
+            c.ShowNotifications = imported.ShowNotifications;
+            c.TrayIconVisible = imported.TrayIconVisible;
+            c.LogPassThrough = imported.LogPassThrough;
+            c.AllowSingleKeyBlocking = imported.AllowSingleKeyBlocking;
+            c.MaxLogEntries = imported.MaxLogEntries;
+            c.StartWithWindows = imported.StartWithWindows;
+            c.StartEnabled = imported.StartEnabled;
+            c.ActiveProfile = imported.ActiveProfile;
+            c.Profiles = imported.Profiles;
+            c.NotificationSound = imported.NotificationSound;
+            c.NotificationDurationMs = imported.NotificationDurationMs;
+            c.TypingRules = imported.TypingRules;
         });
         return Ok(new { success = true });
     }
@@ -137,21 +145,25 @@ public class StatusController : ControllerBase
     public ActionResult GetStats()
     {
         var events = _blockingService.EventLog;
+        var blockedEvents = events.Where(e => e.WasBlocked).ToList();
+
         return Ok(new
         {
             totalEvents = events.Count,
-            blockedCount = events.Count(e => e.WasBlocked),
-            passedCount = events.Count(e => !e.WasBlocked),
-            topBlocked = events.Where(e => e.WasBlocked)
+            blockedCount = blockedEvents.Count,
+            passedCount = events.Count - blockedEvents.Count,
+            topBlocked = blockedEvents
                 .GroupBy(e => e.ShortcutDisplay)
-                .OrderByDescending(g => g.Count())
+                .Select(group => new { shortcut = group.Key, count = group.Count() })
+                .OrderByDescending(group => group.count)
                 .Take(5)
-                .Select(g => new { shortcut = g.Key, count = g.Count() }),
-            topProcesses = events.Where(e => e.WasBlocked)
+                .ToList(),
+            topProcesses = blockedEvents
                 .GroupBy(e => e.ProcessName)
-                .OrderByDescending(g => g.Count())
+                .Select(group => new { process = group.Key, count = group.Count() })
+                .OrderByDescending(group => group.count)
                 .Take(5)
-                .Select(g => new { process = g.Key, count = g.Count() })
+                .ToList()
         });
     }
 }

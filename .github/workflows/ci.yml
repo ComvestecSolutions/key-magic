@@ -39,7 +39,7 @@ jobs:
         run: bun run build
 
       - name: Restore .NET dependencies
-        run: dotnet restore KeyMagic.sln --runtime win-x64
+        run: dotnet restore KeyMagic.sln --runtime win-x64 /p:SelfContained=true
 
       - name: Build solution
         run: dotnet build KeyMagic.sln --configuration Release --no-restore

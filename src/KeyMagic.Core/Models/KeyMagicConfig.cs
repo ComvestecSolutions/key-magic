@@ -6,10 +6,10 @@ namespace KeyMagic.Core.Models;
 public class KeyMagicConfig
 {
     /// <summary>Master toggle : when false, no shortcuts are blocked.</summary>
-    public bool GlobalEnabled { get; set; } = true;
+    public bool GlobalEnabled { get; set; } = false;
 
     /// <summary>All configured blocking rules.</summary>
-    public List<BlockingRule> Rules { get; set; } = new();
+    public List<BlockingRule> Rules { get; set; } = CreateDefaultRules();
 
     /// <summary>Port for the local web dashboard.</summary>
     public int WebDashboardPort { get; set; } = 5199;
@@ -39,10 +39,7 @@ public class KeyMagicConfig
     public string ActiveProfile { get; set; } = "Default";
 
     /// <summary>Saved rule profiles for quick switching.</summary>
-    public Dictionary<string, List<string>> Profiles { get; set; } = new()
-    {
-        ["Default"] = new List<string>()
-    };
+    public Dictionary<string, List<string>> Profiles { get; set; } = CreateDefaultProfiles();
 
     /// <summary>Notification sound enabled.</summary>
     public bool NotificationSound { get; set; } = false;
@@ -52,4 +49,67 @@ public class KeyMagicConfig
 
     /// <summary>All configured typing rules.</summary>
     public List<TypingRule> TypingRules { get; set; } = new();
+
+    public static KeyMagicConfig CreateDefault() => new();
+
+    public KeyMagicConfig Clone()
+    {
+        return new KeyMagicConfig
+        {
+            GlobalEnabled = GlobalEnabled,
+            Rules = Rules?.Select(rule => rule.Clone()).ToList() ?? CreateDefaultRules(),
+            WebDashboardPort = WebDashboardPort,
+            ShowNotifications = ShowNotifications,
+            TrayIconVisible = TrayIconVisible,
+            LogPassThrough = LogPassThrough,
+            AllowSingleKeyBlocking = AllowSingleKeyBlocking,
+            MaxLogEntries = MaxLogEntries,
+            StartWithWindows = StartWithWindows,
+            StartEnabled = StartEnabled,
+            ActiveProfile = ActiveProfile,
+            Profiles = Profiles?.ToDictionary(entry => entry.Key, entry => new List<string>(entry.Value)) ?? CreateDefaultProfiles(),
+            NotificationSound = NotificationSound,
+            NotificationDurationMs = NotificationDurationMs,
+            TypingRules = TypingRules?.Select(rule => rule.Clone()).ToList() ?? new List<TypingRule>()
+        };
+    }
+
+    private static List<BlockingRule> CreateDefaultRules()
+    {
+        return new List<BlockingRule>
+        {
+            new()
+            {
+                Shortcut = new ShortcutKey
+                {
+                    DisplayName = "Alt+Tab",
+                    VirtualKeyCode = 0x09,
+                    Alt = true
+                },
+                TargetProcesses = new List<string>(),
+                Enabled = false,
+                Description = "Block Alt+Tab (example: disabled by default)"
+            },
+            new()
+            {
+                Shortcut = new ShortcutKey
+                {
+                    DisplayName = "Ctrl+W",
+                    VirtualKeyCode = 0x57,
+                    Ctrl = true
+                },
+                TargetProcesses = new List<string> { "chrome", "msedge", "firefox" },
+                Enabled = false,
+                Description = "Prevent accidental tab close in browsers"
+            }
+        };
+    }
+
+    private static Dictionary<string, List<string>> CreateDefaultProfiles()
+    {
+        return new Dictionary<string, List<string>>
+        {
+            ["Default"] = new List<string>()
+        };
+    }
 }

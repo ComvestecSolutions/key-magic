@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using KeyMagic.Core.Configuration;
+using KeyMagic.Core.Interop;
 using KeyMagic.Core.Models;
 using Microsoft.Extensions.Logging;
 
@@ -51,10 +52,6 @@ public class HotkeyBlocker : IDisposable
     private const int WM_HOTKEY = 0x0312;
     private const uint WM_APP_REFRESH = 0x8001; // WM_APP + 1
 
-    // ─── SendInput constants ───────────────────────────────────────
-    private const int INPUT_KEYBOARD = 1;
-    private const uint KEYEVENTF_KEYUP = 0x0002;
-
     // ─── P/Invoke ──────────────────────────────────────────────────
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -75,34 +72,10 @@ public class HotkeyBlocker : IDisposable
     private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
 
     [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-
-    [DllImport("user32.dll")]
     private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
-
-    // Explicit layout matching Win32 64-bit INPUT exactly (40 bytes).
-    [StructLayout(LayoutKind.Explicit, Size = 40)]
-    private struct INPUT
-    {
-        [FieldOffset(0)] public int type;
-        [FieldOffset(8)] public KEYBDINPUT ki;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KEYBDINPUT
-    {
-        public ushort wVk;
-        public ushort wScan;
-        public uint dwFlags;
-        public uint time;
-        public IntPtr dwExtraInfo;
-    }
+    private static extern uint SendInput(uint nInputs, Win32Interop.INPUT[] pInputs, int cbSize);
 
     // ─── Fields ────────────────────────────────────────────────────
     private readonly ConfigStore _configStore;
@@ -212,7 +185,7 @@ public class HotkeyBlocker : IDisposable
             return;
         }
 
-        var hwnd = GetForegroundWindow();
+        var hwnd = Win32Interop.GetForegroundWindowHandle();
         if (hwnd == IntPtr.Zero)
         {
             // No foreground window — keep existing state rather than
@@ -221,7 +194,7 @@ public class HotkeyBlocker : IDisposable
             return;
         }
 
-        string processName = GetProcessName(hwnd);
+        string processName = Win32Interop.GetProcessName(hwnd, _logger);
         if (string.IsNullOrEmpty(processName))
         {
             // Transient failure (process exited between PID lookup and
@@ -354,21 +327,6 @@ public class HotkeyBlocker : IDisposable
             : name;
     }
 
-    private string GetProcessName(IntPtr hwnd)
-    {
-        try
-        {
-            GetWindowThreadProcessId(hwnd, out uint pid);
-            using var proc = Process.GetProcessById((int)pid);
-            return proc.ProcessName;
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogDebug(ex, "Could not get process name for window handle");
-            return string.Empty;
-        }
-    }
-
     public void Dispose()
     {
         if (!_disposed)
@@ -397,8 +355,8 @@ public class HotkeyBlocker : IDisposable
             return; // unknown ID — consume silently
 
         // Check current foreground process.
-        var hwnd = GetForegroundWindow();
-        string processName = (hwnd != IntPtr.Zero) ? GetProcessName(hwnd) : string.Empty;
+        var hwnd = Win32Interop.GetForegroundWindowHandle();
+        string processName = (hwnd != IntPtr.Zero) ? Win32Interop.GetProcessName(hwnd, _logger) : string.Empty;
         if (string.IsNullOrEmpty(processName) && hwnd == _lastKnownFgHwnd)
             processName = _lastKnownProcessName;
 
@@ -451,53 +409,37 @@ public class HotkeyBlocker : IDisposable
     /// </summary>
     private static void ReInjectHotkey((uint mods, int vk) combo)
     {
-        var inputs = new List<INPUT>();
+        var inputs = new List<Win32Interop.INPUT>();
 
         // Press modifiers
         if ((combo.mods & MOD_CONTROL) != 0)
-            inputs.Add(MakeKeyInput(0xA2, 0));           // VK_LCONTROL down
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA2, 0));                    // VK_LCONTROL down
         if ((combo.mods & MOD_ALT) != 0)
-            inputs.Add(MakeKeyInput(0xA4, 0));           // VK_LMENU down
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA4, 0));                    // VK_LMENU down
         if ((combo.mods & MOD_SHIFT) != 0)
-            inputs.Add(MakeKeyInput(0xA0, 0));           // VK_LSHIFT down
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA0, 0));                    // VK_LSHIFT down
         if ((combo.mods & MOD_WIN) != 0)
-            inputs.Add(MakeKeyInput(0x5B, 0));           // VK_LWIN down
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0x5B, 0));                    // VK_LWIN down
 
         // Press + release the main key
-        inputs.Add(MakeKeyInput((ushort)combo.vk, 0));
-        inputs.Add(MakeKeyInput((ushort)combo.vk, KEYEVENTF_KEYUP));
+        inputs.Add(Win32Interop.CreateVirtualKeyInput((ushort)combo.vk, 0));
+        inputs.Add(Win32Interop.CreateVirtualKeyInput((ushort)combo.vk, Win32Interop.KeyEventFKeyUp));
 
         // Release modifiers (reverse order)
         if ((combo.mods & MOD_WIN) != 0)
-            inputs.Add(MakeKeyInput(0x5B, KEYEVENTF_KEYUP));
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0x5B, Win32Interop.KeyEventFKeyUp));
         if ((combo.mods & MOD_SHIFT) != 0)
-            inputs.Add(MakeKeyInput(0xA0, KEYEVENTF_KEYUP));
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA0, Win32Interop.KeyEventFKeyUp));
         if ((combo.mods & MOD_ALT) != 0)
-            inputs.Add(MakeKeyInput(0xA4, KEYEVENTF_KEYUP));
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA4, Win32Interop.KeyEventFKeyUp));
         if ((combo.mods & MOD_CONTROL) != 0)
-            inputs.Add(MakeKeyInput(0xA2, KEYEVENTF_KEYUP));
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA2, Win32Interop.KeyEventFKeyUp));
 
         if (inputs.Count > 0)
         {
             var arr = inputs.ToArray();
-            SendInput((uint)arr.Length, arr, Marshal.SizeOf<INPUT>());
+            SendInput((uint)arr.Length, arr, Win32Interop.InputSize);
         }
-    }
-
-    private static INPUT MakeKeyInput(ushort vk, uint flags)
-    {
-        return new INPUT
-        {
-            type = INPUT_KEYBOARD,
-            ki = new KEYBDINPUT
-            {
-                wVk = vk,
-                wScan = 0,
-                dwFlags = flags,
-                time = 0,
-                dwExtraInfo = IntPtr.Zero
-            }
-        };
     }
 
     // ═══════════════════════════════════════════════════════════════

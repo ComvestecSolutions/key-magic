@@ -31,15 +31,36 @@ public class ShortcutBlockingService : IDisposable
     private readonly LowLevelKeyboardHook _hook;
     private readonly HotkeyBlocker _hotkeyBlocker;
     private readonly ConcurrentQueue<ShortcutEvent> _eventLog = new();
+    private readonly object _eventLogLock = new();
     private readonly Action<KeyMagicConfig> _onConfigChanged;
+    private IReadOnlyList<ShortcutEvent> _eventLogSnapshot = Array.Empty<ShortcutEvent>();
+    private int _eventLogVersion;
+    private int _eventLogSnapshotVersion = -1;
     private bool _disposed;
 
     /// <summary>Fired whenever a shortcut event (blocked or passed) occurs.</summary>
     public event Action<ShortcutEvent>? ShortcutEventOccurred;
 
     /// <summary>Current event log (most recent first).</summary>
-    public IReadOnlyList<ShortcutEvent> EventLog =>
-        _eventLog.Reverse().ToList().AsReadOnly();
+    public IReadOnlyList<ShortcutEvent> EventLog
+    {
+        get
+        {
+            lock (_eventLogLock)
+            {
+                if (_eventLogSnapshotVersion == _eventLogVersion)
+                {
+                    return _eventLogSnapshot;
+                }
+
+                var snapshot = _eventLog.ToArray();
+                Array.Reverse(snapshot);
+                _eventLogSnapshot = Array.AsReadOnly(snapshot);
+                _eventLogSnapshotVersion = _eventLogVersion;
+                return _eventLogSnapshot;
+            }
+        }
+    }
 
     /// <summary>Is the hook currently installed?</summary>
     public bool IsRunning => _hook.IsHooked;
@@ -82,7 +103,20 @@ public class ShortcutBlockingService : IDisposable
     /// <summary>Clears the event log.</summary>
     public void ClearLog()
     {
-        while (_eventLog.TryDequeue(out _)) { }
+        lock (_eventLogLock)
+        {
+            var cleared = false;
+            while (_eventLog.TryDequeue(out _))
+            {
+                cleared = true;
+            }
+
+            if (cleared)
+            {
+                _eventLogVersion++;
+                _eventLogSnapshotVersion = -1;
+            }
+        }
     }
 
     /// <summary>
@@ -180,12 +214,17 @@ public class ShortcutBlockingService : IDisposable
 
     private void LogEvent(ShortcutEvent evt)
     {
-        _eventLog.Enqueue(evt);
+        lock (_eventLogLock)
+        {
+            _eventLog.Enqueue(evt);
 
-        // Trim to max entries
-        var max = _configStore.Config.MaxLogEntries;
-        while (_eventLog.Count > max)
-            _eventLog.TryDequeue(out _);
+            var max = _configStore.Config.MaxLogEntries;
+            while (_eventLog.Count > max)
+                _eventLog.TryDequeue(out _);
+
+            _eventLogVersion++;
+            _eventLogSnapshotVersion = -1;
+        }
 
         ShortcutEventOccurred?.Invoke(evt);
     }

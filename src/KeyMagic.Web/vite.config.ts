@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   server: {
     port: 4173,
@@ -12,6 +12,6 @@ export default defineConfig({
   build: {
     outDir: "../KeyMagic.Service/wwwroot",
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: mode !== "production",
   },
-});
+}));

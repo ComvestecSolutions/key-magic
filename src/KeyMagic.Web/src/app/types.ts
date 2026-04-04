@@ -62,6 +62,7 @@ export interface StatusSnapshot {
   notificationSound: boolean;
   notificationDurationMs: number;
   webDashboardPort: number;
+  adminToken: string;
 }
 
 export interface StatusStats {

@@ -1,7 +1,9 @@
+using System.Security.Cryptography;
 using KeyMagic.Core.Configuration;
 using KeyMagic.Core.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -28,6 +30,7 @@ internal static class WebDashboardHost
         builder.Services.AddSingleton(configStore);
         builder.Services.AddSingleton(blockingService);
         builder.Services.AddSingleton(typingService);
+        builder.Services.AddSingleton<DashboardMutationProtector>();
         builder.Services.AddControllers()
             .AddJsonOptions(options =>
             {
@@ -50,8 +53,23 @@ internal static class WebDashboardHost
         });
 
         var app = builder.Build();
+        var mutationProtector = app.Services.GetRequiredService<DashboardMutationProtector>();
 
         app.UseCors();
+        app.Use(async (context, next) =>
+        {
+            var method = context.Request.Method;
+            var isMutation = HttpMethods.IsPost(method) || HttpMethods.IsPut(method) || HttpMethods.IsDelete(method) || HttpMethods.IsPatch(method);
+
+            if (isMutation && context.Request.Path.StartsWithSegments("/api") && !mutationProtector.HasValidToken(context.Request))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new { error = "Missing or invalid admin token." });
+                return;
+            }
+
+            await next();
+        });
 
         if (frontendAssets != null)
         {
@@ -70,5 +88,24 @@ internal static class WebDashboardHost
 
         startupLogger.LogInformation("KeyMagic dashboard: http://localhost:{Port}", port);
         return app;
+    }
+}
+
+internal sealed class DashboardMutationProtector
+{
+    public const string HeaderName = "X-Admin-Token";
+
+    public DashboardMutationProtector()
+    {
+        AdminToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+    }
+
+    public string AdminToken { get; }
+
+    public bool HasValidToken(HttpRequest request)
+    {
+        return request.Headers.TryGetValue(HeaderName, out var value)
+            && value.Count == 1
+            && string.Equals(value[0], AdminToken, StringComparison.Ordinal);
     }
 }

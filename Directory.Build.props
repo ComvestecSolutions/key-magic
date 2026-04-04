@@ -1,5 +1,9 @@
 <Project>
   <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
     <Company>Comvestec Solutions</Company>
     <Authors>Comvestec Solutions</Authors>
     <Product>Key Magic</Product>

@@ -28,6 +28,20 @@ public class ShortcutKey
     /// <summary>Whether the Windows key must be held.</summary>
     public bool Win { get; set; }
 
+    public ShortcutKey Clone()
+    {
+        return new ShortcutKey
+        {
+            Id = Id,
+            DisplayName = DisplayName,
+            VirtualKeyCode = VirtualKeyCode,
+            Ctrl = Ctrl,
+            Alt = Alt,
+            Shift = Shift,
+            Win = Win
+        };
+    }
+
     public override string ToString()
     {
         var parts = new List<string>();

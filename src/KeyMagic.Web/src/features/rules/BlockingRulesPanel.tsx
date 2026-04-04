@@ -53,18 +53,22 @@ export function BlockingRulesPanel({ rules, processes, busy, onCreate, onToggle,
       return
     }
 
-    await onCreate({
-      displayName: buildShortcutDisplay(form.keyLabel, form),
-      virtualKeyCode,
-      ctrl: form.ctrl,
-      alt: form.alt,
-      shift: form.shift,
-      win: form.win,
-      targetProcesses: form.targetProcesses,
-      description: form.description || undefined,
-    })
+    try {
+      await onCreate({
+        displayName: buildShortcutDisplay(form.keyLabel, form),
+        virtualKeyCode,
+        ctrl: form.ctrl,
+        alt: form.alt,
+        shift: form.shift,
+        win: form.win,
+        targetProcesses: form.targetProcesses,
+        description: form.description || undefined,
+      })
 
-    setForm(initialForm)
+      setForm(initialForm)
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : 'Failed to create blocking rule.')
+    }
   }
 
   return (

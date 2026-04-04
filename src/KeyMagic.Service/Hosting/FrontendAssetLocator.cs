@@ -22,7 +22,8 @@ internal static class FrontendAssetLocator
         yield return new FrontendAssetRoot(Path.Combine(AppContext.BaseDirectory, "wwwroot"), "published-spa");
 
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory != null)
+        const int maxDepth = 8;
+        for (var depth = 0; directory != null && depth < maxDepth; depth++)
         {
             yield return new FrontendAssetRoot(Path.Combine(directory.FullName, "src", "KeyMagic.Service", "wwwroot"), "source-wwwroot");
             yield return new FrontendAssetRoot(Path.Combine(directory.FullName, "src", "KeyMagic.Web", "dist"), "spa-dist");

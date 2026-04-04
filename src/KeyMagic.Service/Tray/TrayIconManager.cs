@@ -13,6 +13,7 @@ namespace KeyMagic.Service.Tray;
 public class TrayIconManager : IDisposable
 {
     private readonly NotifyIcon _notifyIcon;
+    private readonly Control _uiInvoker;
     private readonly ConfigStore _configStore;
     private readonly ShortcutBlockingService _blockingService;
     private readonly int _dashboardPort;
@@ -25,6 +26,8 @@ public class TrayIconManager : IDisposable
         _blockingService = blockingService;
         _dashboardPort = configStore.Config.WebDashboardPort;
         _logger = logger;
+        _uiInvoker = new Control();
+        _ = _uiInvoker.Handle;
 
         _notifyIcon = new NotifyIcon
         {
@@ -47,26 +50,30 @@ public class TrayIconManager : IDisposable
     {
         try
         {
-            // ConfigChanged fires from the web API background thread.
-            // WinForms controls must only be accessed from the UI thread.
-            if (_notifyIcon.ContextMenuStrip?.InvokeRequired == true)
+            if (_uiInvoker.IsDisposed)
             {
-                _notifyIcon.ContextMenuStrip.BeginInvoke(() =>
-                {
-                    _notifyIcon.Visible = config.TrayIconVisible;
-                    UpdateIcon();
-                });
+                return;
+            }
+
+            if (_uiInvoker.InvokeRequired)
+            {
+                _uiInvoker.BeginInvoke(() => ApplyConfigChange(config));
             }
             else
             {
-                _notifyIcon.Visible = config.TrayIconVisible;
-                UpdateIcon();
+                ApplyConfigChange(config);
             }
         }
         catch (Exception ex)
         {
             _logger?.LogWarning(ex, "Failed to apply config change to tray icon");
         }
+    }
+
+    private void ApplyConfigChange(KeyMagicConfig config)
+    {
+        _notifyIcon.Visible = config.TrayIconVisible;
+        UpdateIcon();
     }
 
     private ContextMenuStrip BuildContextMenu()
@@ -345,18 +352,30 @@ public class TrayIconManager : IDisposable
 
     public void Dispose()
     {
-        if (!_disposed)
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (disposing)
         {
             _blockingService.ShortcutEventOccurred -= OnShortcutEvent;
             _configStore.ConfigChanged -= OnConfigChanged;
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
-            _disposed = true;
+            _uiInvoker.Dispose();
         }
-        GC.SuppressFinalize(this);
+
+        _disposed = true;
     }
 
-    ~TrayIconManager() => Dispose();
+    ~TrayIconManager() => Dispose(disposing: false);
 }
 
 /// <summary>

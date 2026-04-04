@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using KeyMagic.Core.Configuration;
+using KeyMagic.Core.Interop;
 using KeyMagic.Core.Models;
 
 namespace KeyMagic.Core.Services;
@@ -35,11 +36,6 @@ public sealed class TypingService : IDisposable
     private const uint WM_APP_REFRESH = 0x8002; // WM_APP + 2
     private const uint WM_APP_TRIGGER = 0x8003; // WM_APP + 3
 
-    // ─── SendInput constants ───────────────────────────────────────
-    private const int INPUT_KEYBOARD = 1;
-    private const uint KEYEVENTF_KEYUP = 0x0002;
-    private const uint KEYEVENTF_UNICODE = 0x0004;
-
     // ─── Starting hotkey ID (each window has its own ID space) ─────
     private const int HOTKEY_ID_BASE = 1;
 
@@ -54,31 +50,7 @@ public sealed class TypingService : IDisposable
     private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
-
-    // Win32 INPUT on 64-bit: DWORD type(4) + padding(4) + union(32) = 40 bytes.
-    // The union must be at least as large as MOUSEINPUT (32 bytes).  We use an
-    // explicit layout so Marshal.SizeOf<INPUT>() == 40, matching the cbSize that
-    // SendInput requires.  Without this, SendInput receives a wrong cbSize and
-    // injects nothing.
-    [StructLayout(LayoutKind.Explicit, Size = 40)]
-    private struct INPUT
-    {
-        [FieldOffset(0)] public int type;
-        // The union starts at offset 8 (4-byte DWORD + 4-byte padding for
-        // 8-byte alignment required by ULONG_PTR inside the union members).
-        [FieldOffset(8)] public KEYBDINPUT ki;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KEYBDINPUT
-    {
-        public ushort wVk;
-        public ushort wScan;
-        public uint dwFlags;
-        public uint time;
-        public IntPtr dwExtraInfo;
-    }
+    private static extern uint SendInput(uint nInputs, Win32Interop.INPUT[] pInputs, int cbSize);
 
     // ─── Fields ────────────────────────────────────────────────────
     private readonly ConfigStore _configStore;
@@ -329,33 +301,33 @@ public sealed class TypingService : IDisposable
     /// </summary>
     private static void ReleaseModifiers(uint mods)
     {
-        var inputs = new List<INPUT>();
+        var inputs = new List<Win32Interop.INPUT>();
         // Release both LEFT and RIGHT variants so physical key state never
         // bleeds into the typed characters.
         if ((mods & MOD_CONTROL) != 0)
         {
-            inputs.Add(MakeVkInput(0xA2, KEYEVENTF_KEYUP)); // VK_LCONTROL
-            inputs.Add(MakeVkInput(0xA3, KEYEVENTF_KEYUP)); // VK_RCONTROL
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA2, Win32Interop.KeyEventFKeyUp)); // VK_LCONTROL
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA3, Win32Interop.KeyEventFKeyUp)); // VK_RCONTROL
         }
         if ((mods & MOD_ALT) != 0)
         {
-            inputs.Add(MakeVkInput(0xA4, KEYEVENTF_KEYUP)); // VK_LMENU
-            inputs.Add(MakeVkInput(0xA5, KEYEVENTF_KEYUP)); // VK_RMENU
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA4, Win32Interop.KeyEventFKeyUp)); // VK_LMENU
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA5, Win32Interop.KeyEventFKeyUp)); // VK_RMENU
         }
         if ((mods & MOD_SHIFT) != 0)
         {
-            inputs.Add(MakeVkInput(0xA0, KEYEVENTF_KEYUP)); // VK_LSHIFT
-            inputs.Add(MakeVkInput(0xA1, KEYEVENTF_KEYUP)); // VK_RSHIFT
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA0, Win32Interop.KeyEventFKeyUp)); // VK_LSHIFT
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0xA1, Win32Interop.KeyEventFKeyUp)); // VK_RSHIFT
         }
         if ((mods & MOD_WIN) != 0)
         {
-            inputs.Add(MakeVkInput(0x5B, KEYEVENTF_KEYUP)); // VK_LWIN
-            inputs.Add(MakeVkInput(0x5C, KEYEVENTF_KEYUP)); // VK_RWIN
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0x5B, Win32Interop.KeyEventFKeyUp)); // VK_LWIN
+            inputs.Add(Win32Interop.CreateVirtualKeyInput(0x5C, Win32Interop.KeyEventFKeyUp)); // VK_RWIN
         }
         if (inputs.Count == 0) return;
 
         var arr = inputs.ToArray();
-        SendInput((uint)arr.Length, arr, Marshal.SizeOf<INPUT>());
+        SendInput((uint)arr.Length, arr, Win32Interop.InputSize);
     }
 
     /// <summary>
@@ -364,36 +336,47 @@ public sealed class TypingService : IDisposable
     /// </summary>
     private static void TypeText(string text, int interKeyDelayMs)
     {
-        foreach (char c in text)
+        for (var index = 0; index < text.Length; index++)
         {
-            // Handle surrogate pairs (characters outside the BMP).
-            if (char.IsHighSurrogate(c)) continue; // paired with next char below
+            var current = text[index];
 
-            var down = MakeUnicodeInput(c, 0);
-            var up = MakeUnicodeInput(c, KEYEVENTF_KEYUP);
-            SendInput(2, [down, up], Marshal.SizeOf<INPUT>());
+            if (char.IsHighSurrogate(current))
+            {
+                if (index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]))
+                {
+                    SendUnicodeInputs((ushort)current, (ushort)text[index + 1]);
+                    index++;
+                }
+                else
+                {
+                    SendUnicodeInputs('\uFFFD');
+                }
+            }
+            else if (char.IsLowSurrogate(current))
+            {
+                SendUnicodeInputs('\uFFFD');
+            }
+            else
+            {
+                SendUnicodeInputs(current);
+            }
 
             if (interKeyDelayMs > 0)
                 Thread.Sleep(interKeyDelayMs);
         }
     }
 
-    private static INPUT MakeVkInput(ushort vk, uint flags) => new()
+    private static void SendUnicodeInputs(params ushort[] codeUnits)
     {
-        type = INPUT_KEYBOARD,
-        ki = new KEYBDINPUT { wVk = vk, dwFlags = flags }
-    };
-
-    private static INPUT MakeUnicodeInput(char c, uint extraFlags) => new()
-    {
-        type = INPUT_KEYBOARD,
-        ki = new KEYBDINPUT
+        var inputs = new Win32Interop.INPUT[codeUnits.Length * 2];
+        for (var index = 0; index < codeUnits.Length; index++)
         {
-            wVk = 0,
-            wScan = c,
-            dwFlags = KEYEVENTF_UNICODE | extraFlags
+            inputs[index * 2] = Win32Interop.CreateUnicodeInput(codeUnits[index], 0);
+            inputs[(index * 2) + 1] = Win32Interop.CreateUnicodeInput(codeUnits[index], Win32Interop.KeyEventFKeyUp);
         }
-    };
+
+        SendInput((uint)inputs.Length, inputs, Win32Interop.InputSize);
+    }
 
     // ═══════════════════════════════════════════════════════════════
     //  Native window

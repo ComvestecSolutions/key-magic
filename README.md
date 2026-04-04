@@ -1,5 +1,7 @@
 # Key Magic
 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ComvestecSolutions/key-magic?utm_source=oss&utm_medium=github&utm_campaign=ComvestecSolutions%2Fkey-magic&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 Key Magic is a Windows-first keyboard control toolkit for teams and power users who need more than a simple shortcut blocker. It solves two practical problems:
 
 1. Stop destructive or distracting shortcuts from reaching the wrong application.

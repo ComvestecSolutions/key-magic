@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: release-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   verify-merge:
@@ -61,6 +61,9 @@ jobs:
       - name: Resolve version metadata
         id: version
         shell: pwsh
+        env:
+          PR_NUMBER: ${{ needs.verify-merge.outputs.pr_number }}
+          PR_TITLE: ${{ needs.verify-merge.outputs.pr_title }}
         run: |
           [xml]$props = Get-Content Directory.Build.props
           $baseVersion = $props.Project.PropertyGroup.VersionPrefix
@@ -71,11 +74,12 @@ jobs:
 
           $releaseVersion = "$baseVersion-ci.${{ github.run_number }}"
           $shortSha = '${{ github.sha }}'.Substring(0, 7)
+          $releaseNotes = "Automated prerelease from merged PR #$env:PR_NUMBER: $env:PR_TITLE ($shortSha)."
 
           "release_version=$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "tag_name=v$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "release_name=Mainline $releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "release_notes=Automated prerelease from merged PR #${{ needs.verify-merge.outputs.pr_number }}: ${{ needs.verify-merge.outputs.pr_title }} ($shortSha)." | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "release_notes=$releaseNotes" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -96,7 +100,7 @@ jobs:
         run: bun run build
 
       - name: Restore .NET dependencies
-        run: dotnet restore KeyMagic.sln --runtime win-x64
+        run: dotnet restore KeyMagic.sln --runtime win-x64 /p:SelfContained=true
 
       - name: Build solution
         run: dotnet build KeyMagic.sln --configuration Release --no-restore /p:Version=${{ steps.version.outputs.release_version }}

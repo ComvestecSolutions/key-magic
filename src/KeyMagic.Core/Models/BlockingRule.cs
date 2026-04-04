@@ -23,6 +23,19 @@ public class BlockingRule
     /// <summary>Human-readable description of the rule.</summary>
     public string Description { get; set; } = string.Empty;
 
-    /// <summary>When so the rule was created.</summary>
+    /// <summary>When the rule was created.</summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public BlockingRule Clone()
+    {
+        return new BlockingRule
+        {
+            Id = Id,
+            Shortcut = Shortcut.Clone(),
+            TargetProcesses = new List<string>(TargetProcesses),
+            Enabled = Enabled,
+            Description = Description,
+            CreatedAt = CreatedAt
+        };
+    }
 }

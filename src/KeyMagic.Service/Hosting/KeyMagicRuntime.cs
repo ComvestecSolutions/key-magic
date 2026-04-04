@@ -6,13 +6,14 @@ using Microsoft.Extensions.Logging;
 
 namespace KeyMagic.Service.Hosting;
 
-internal sealed class KeyMagicRuntime : IDisposable
+internal sealed class KeyMagicRuntime : IDisposable, IAsyncDisposable
 {
     private readonly ILoggerFactory _loggerFactory;
     private readonly ShortcutBlockingService _blockingService;
     private readonly TypingService _typingService;
     private readonly TrayIconManager _trayIconManager;
     private readonly WebApplication _webApplication;
+    private bool _disposed;
 
     private KeyMagicRuntime(
         ILoggerFactory loggerFactory,
@@ -59,9 +60,21 @@ internal sealed class KeyMagicRuntime : IDisposable
 
     public void Dispose()
     {
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
         _trayIconManager.Dispose();
-        _webApplication.StopAsync().GetAwaiter().GetResult();
-        _webApplication.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        await _webApplication.StopAsync();
+        await _webApplication.DisposeAsync();
         _typingService.Stop();
         _typingService.Dispose();
         _blockingService.Stop();

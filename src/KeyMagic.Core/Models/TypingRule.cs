@@ -16,6 +16,8 @@ public enum TextSource
 /// </summary>
 public class TypingRule
 {
+    private int _interKeyDelayMs = 30;
+
     /// <summary>Unique identifier for this rule.</summary>
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
 
@@ -34,11 +36,38 @@ public class TypingRule
     public string Text { get; set; } = string.Empty;
 
     /// <summary>Milliseconds to wait between each typed character (0 = no delay).</summary>
-    public int InterKeyDelayMs { get; set; } = 30;
+    public int InterKeyDelayMs
+    {
+        get => _interKeyDelayMs;
+        set
+        {
+            if (value < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(InterKeyDelayMs), value, "Inter-key delay must be zero or greater.");
+            }
+
+            _interKeyDelayMs = value;
+        }
+    }
 
     /// <summary>Whether this rule is currently active.</summary>
     public bool Enabled { get; set; } = true;
 
     /// <summary>When the rule was created.</summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public TypingRule Clone()
+    {
+        return new TypingRule
+        {
+            Id = Id,
+            Name = Name,
+            Hotkey = Hotkey.Clone(),
+            Source = Source,
+            Text = Text,
+            InterKeyDelayMs = InterKeyDelayMs,
+            Enabled = Enabled,
+            CreatedAt = CreatedAt
+        };
+    }
 }

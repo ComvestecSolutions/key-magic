@@ -61,21 +61,25 @@ export function TypingRulesPanel({ rules, busy, onCreate, onToggle, onDelete, on
       return
     }
 
-    await onCreate({
-      name: form.name,
-      displayName: buildShortcutDisplay(form.keyLabel, form),
-      virtualKeyCode,
-      ctrl: form.ctrl,
-      alt: form.alt,
-      shift: form.shift,
-      win: form.win,
-      source: form.source,
-      text: form.text,
-      interKeyDelayMs: form.interKeyDelayMs,
-      enabled: form.enabled,
-    })
+    try {
+      await onCreate({
+        name: form.name,
+        displayName: buildShortcutDisplay(form.keyLabel, form),
+        virtualKeyCode,
+        ctrl: form.ctrl,
+        alt: form.alt,
+        shift: form.shift,
+        win: form.win,
+        source: form.source,
+        text: form.text,
+        interKeyDelayMs: form.interKeyDelayMs,
+        enabled: form.enabled,
+      })
 
-    setForm(initialForm)
+      setForm(initialForm)
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : 'Failed to create typing rule.')
+    }
   }
 
   return (

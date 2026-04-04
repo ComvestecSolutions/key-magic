@@ -26,20 +26,44 @@ public static class ProcessHelper
             var processes = Process.GetProcesses();
             try
             {
-                return processes
-                    .Where(p => !string.IsNullOrWhiteSpace(p.ProcessName) && !skipList.Contains(p.ProcessName))
-                    .GroupBy(p => p.ProcessName, StringComparer.OrdinalIgnoreCase)
+                var snapshots = new List<(string ProcessName, string WindowTitle)>();
+
+                foreach (var process in processes)
+                {
+                    string processName;
+                    try
+                    {
+                        processName = process.ProcessName;
+                    }
+                    catch (Exception ex)
+                    {
+                        logger?.LogDebug(ex, "Could not read process name for PID {ProcessId}", process.Id);
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(processName) || skipList.Contains(processName))
+                    {
+                        continue;
+                    }
+
+                    string windowTitle = string.Empty;
+                    try
+                    {
+                        windowTitle = process.MainWindowTitle;
+                    }
+                    catch (Exception ex)
+                    {
+                        logger?.LogDebug(ex, "Could not read window title for process {Name}", processName);
+                    }
+
+                    snapshots.Add((processName, windowTitle));
+                }
+
+                return snapshots
+                    .GroupBy(process => process.ProcessName, StringComparer.OrdinalIgnoreCase)
                     .Select(g =>
                     {
-                        string title = string.Empty;
-                        try
-                        {
-                            title = g.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.MainWindowTitle))?.MainWindowTitle ?? string.Empty;
-                        }
-                        catch (Exception ex)
-                        {
-                            logger?.LogDebug(ex, "Could not get window title for process {Name}", g.Key);
-                        }
+                        var title = g.FirstOrDefault(process => !string.IsNullOrWhiteSpace(process.WindowTitle)).WindowTitle ?? string.Empty;
 
                         return new ProcessInfo
                         {
