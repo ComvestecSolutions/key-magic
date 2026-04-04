@@ -98,11 +98,10 @@ dotnet run --project src/KeyMagic.Tester/KeyMagic.Tester.csproj
 The repository is set up for a GitHub-flow release model.
 
 - Feature work happens on short-lived branches such as `feature/...` and `hotfix/...`.
-- CI runs on pushes to those branches and on pull requests targeting `main`.
-- Every merge to `main` produces a GitHub prerelease with fresh Windows artifacts for validation.
-- Stable GitHub releases are created from semantic version tags in the form `vMAJOR.MINOR.PATCH`.
-- The current version metadata points at `v0.1.0` as the first planned stable release tag.
-- That first stable release should be cut from `main` after a mainline prerelease has been validated.
+- The validation pipeline runs only on pull requests targeting `main`.
+- A merge commit landing on `main` triggers the release pipeline.
+- The release pipeline rebuilds the merged commit, publishes the Windows artifacts, and creates a GitHub prerelease in the form `vMAJOR.MINOR.PATCH-ci.RUN_NUMBER`.
+- The current version metadata points at `0.1.0` as the base semantic version for merge-driven prereleases.
 
 Current release outputs:
 
@@ -110,12 +109,13 @@ Current release outputs:
 - Portable self-contained Windows build for the tester.
 - Zipped release bundles attached to GitHub releases.
 
-See `docs/releases.md` for the full branch, prerelease, and stable artifact model.
+See `docs/releases.md` for the full branch, validation, and prerelease artifact model.
 
 ## Notes
 
 - Some Windows-reserved shortcuts cannot be intercepted from user mode.
 - Blocking remains a local machine capability; there is no remote service dependency.
+- The release workflow assumes `main` is protected so only reviewed pull requests can merge and trigger prereleases.
 - The current release workflows do not produce MSIX yet because the repository does not include a packaging project or signing configuration.
 - This repository currently has no recorded commit, tag, or release history. The changelog starts from the present project baseline.
 

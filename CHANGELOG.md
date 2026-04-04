@@ -11,6 +11,6 @@ There is no recorded commit, tag, or published release history in this repositor
 - Key Magic branding, version metadata, and repository automation foundation.
 - Modular service hosting layer for the tray app and local web dashboard.
 - React, TypeScript, and Vite single-page application for rules, typing, events, and settings.
-- GitHub Actions workflows for CI, automatic prereleases from main, and tagged Windows releases.
+- GitHub Actions workflows for pull-request validation and merged-main Windows prereleases.
 - Windows service and tester projects that build as KeyMagic and KeyMagic.Tester.
 - Local configuration stored at %APPDATA%\KeyMagic\config.json.

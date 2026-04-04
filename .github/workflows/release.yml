@@ -2,18 +2,54 @@ name: Release
 
 on:
   push:
-    tags:
-      - v*.*.*
+    branches:
+      - main
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  group: release-main
+  cancel-in-progress: true
 
 jobs:
+  verify-merge:
+    runs-on: ubuntu-latest
+
+    outputs:
+      pr_number: ${{ steps.pr.outputs.number }}
+      pr_title: ${{ steps.pr.outputs.title }}
+
+    steps:
+      - name: Verify commit came from merged pull request
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data: pulls } = await github.request('GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls', {
+              owner,
+              repo,
+              commit_sha: context.sha,
+              headers: {
+                accept: 'application/vnd.github+json'
+              }
+            });
+
+            const mergedPull = pulls.find((pull) => pull.base.ref === 'main' && pull.merged_at);
+
+            if (!mergedPull) {
+              core.setFailed(`Commit ${context.sha} is not associated with a merged pull request into main.`);
+              return;
+            }
+
+            core.info(`Preparing release for merged PR #${mergedPull.number}: ${mergedPull.title}`);
+            core.setOutput('number', String(mergedPull.number));
+            core.setOutput('title', mergedPull.title);
+
   release:
+    needs: verify-merge
     runs-on: windows-latest
 
     steps:
@@ -26,21 +62,20 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $tagName = '${{ github.ref_name }}'
-
-          if ($tagName -notmatch '^v(?<version>\d+\.\d+\.\d+)$') {
-            throw "Release tags must use the format vMAJOR.MINOR.PATCH. Received '$tagName'."
-          }
-
-          $releaseVersion = $Matches.version
           [xml]$props = Get-Content Directory.Build.props
           $baseVersion = $props.Project.PropertyGroup.VersionPrefix
 
-          if ($baseVersion -ne $releaseVersion) {
-            throw "Tag version '$releaseVersion' does not match Directory.Build.props VersionPrefix '$baseVersion'."
+          if ([string]::IsNullOrWhiteSpace($baseVersion)) {
+            throw 'VersionPrefix was not found in Directory.Build.props.'
           }
 
+          $releaseVersion = "$baseVersion-ci.${{ github.run_number }}"
+          $shortSha = '${{ github.sha }}'.Substring(0, 7)
+
           "release_version=$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag_name=v$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "release_name=Mainline $releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "release_notes=Automated prerelease from merged PR #${{ needs.verify-merge.outputs.pr_number }}: ${{ needs.verify-merge.outputs.pr_title }} ($shortSha)." | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -63,7 +98,7 @@ jobs:
         run: npm run build
 
       - name: Restore .NET dependencies
-        run: dotnet restore KeyMagic.sln
+        run: dotnet restore KeyMagic.sln --runtime win-x64
 
       - name: Build solution
         run: dotnet build KeyMagic.sln --configuration Release --no-restore /p:Version=${{ steps.version.outputs.release_version }}
@@ -96,8 +131,13 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: ${{ steps.version.outputs.release_name }}
+          body: ${{ steps.version.outputs.release_notes }}
+          target_commitish: ${{ github.sha }}
+          prerelease: true
           generate_release_notes: true
-          make_latest: true
+          make_latest: false
           files: |
             artifacts/release/KeyMagic-win-x64-portable.zip
             artifacts/release/KeyMagic.Tester-win-x64.zip
