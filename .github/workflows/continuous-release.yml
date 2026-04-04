@@ -1,0 +1,108 @@
+name: Continuous Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: continuous-release-main
+  cancel-in-progress: true
+
+jobs:
+  prerelease:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version metadata
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $baseVersion = $props.Project.PropertyGroup.VersionPrefix
+
+          if ([string]::IsNullOrWhiteSpace($baseVersion)) {
+            throw 'VersionPrefix was not found in Directory.Build.props.'
+          }
+
+          $releaseVersion = "$baseVersion-ci.${{ github.run_number }}"
+          $shortSha = '${{ github.sha }}'.Substring(0, 7)
+
+          "base_version=$baseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "release_version=$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag_name=v$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "release_name=Continuous $releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "release_notes=Automated prerelease from main for commit $shortSha." | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/KeyMagic.Web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/KeyMagic.Web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: src/KeyMagic.Web
+        run: npm run build
+
+      - name: Restore .NET dependencies
+        run: dotnet restore KeyMagic.sln
+
+      - name: Build solution
+        run: dotnet build KeyMagic.sln --configuration Release --no-restore /p:Version=${{ steps.version.outputs.release_version }}
+
+      - name: Publish service
+        run: dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/service/win-x64 --no-restore /p:Version=${{ steps.version.outputs.release_version }}
+
+      - name: Publish tester
+        run: dotnet publish src/KeyMagic.Tester/KeyMagic.Tester.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/tester/win-x64 --no-restore /p:Version=${{ steps.version.outputs.release_version }}
+
+      - name: Create service zip
+        shell: pwsh
+        run: Compress-Archive -Path artifacts/release/service/win-x64/* -DestinationPath artifacts/release/KeyMagic-win-x64-portable.zip -Force
+
+      - name: Create tester zip
+        shell: pwsh
+        run: Compress-Archive -Path artifacts/release/tester/win-x64/* -DestinationPath artifacts/release/KeyMagic.Tester-win-x64.zip -Force
+
+      - name: Upload prerelease artifacts to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: keymagic-prerelease-${{ steps.version.outputs.release_version }}
+          path: |
+            artifacts/release/service/win-x64
+            artifacts/release/tester/win-x64
+            artifacts/release/KeyMagic-win-x64-portable.zip
+            artifacts/release/KeyMagic.Tester-win-x64.zip
+          retention-days: 30
+
+      - name: Create GitHub prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: ${{ steps.version.outputs.release_name }}
+          body: ${{ steps.version.outputs.release_notes }}
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          generate_release_notes: true
+          make_latest: false
+          files: |
+            artifacts/release/KeyMagic-win-x64-portable.zip
+            artifacts/release/KeyMagic.Tester-win-x64.zip

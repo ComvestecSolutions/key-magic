@@ -1,0 +1,28 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+.vs/
+
+## IDE
+.idea/
+*.swp
+*~
+
+## OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+## Build
+publish/
+out/
+artifacts/
+
+## Frontend
+src/KeyMagic.Web/node_modules/
+src/KeyMagic.Web/dist/
+src/KeyMagic.Service/wwwroot/
+src/KeyMagic.Web/*.tsbuildinfo

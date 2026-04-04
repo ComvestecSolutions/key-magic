@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "KeyMagic (Run)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/KeyMagic.Service/bin/Debug/net8.0-windows/KeyMagic.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/KeyMagic.Service",
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "KeyMagic dashboard: http://localhost:(\\d+)"
+      },
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "console": "internalConsole"
+    },
+    {
+      "name": "KeyMagic (dotnet run)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "${workspaceFolder}/src/KeyMagic.Service/KeyMagic.Service.csproj"
+      ],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    },
+    {
+      "name": "KeyMagic Tester",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-tester",
+      "program": "${workspaceFolder}/src/KeyMagic.Tester/bin/Debug/net8.0-windows/KeyMagic.Tester.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/KeyMagic.Tester",
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    }
+  ]
+}

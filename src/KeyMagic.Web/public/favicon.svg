@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Key Magic">
+  <defs>
+    <linearGradient id="shell" x1="14" y1="10" x2="44" y2="45" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffcb8d" />
+      <stop offset="1" stop-color="#ff9954" />
+    </linearGradient>
+  </defs>
+  <ellipse cx="29" cy="52" rx="19" ry="4" fill="#000000" fill-opacity="0.18" />
+  <rect x="10" y="12" width="36" height="34" rx="11" fill="url(#shell)" />
+  <rect x="14" y="17" width="28" height="21" rx="8" fill="#191f2a" />
+  <path d="M18 20h20" stroke="#fff6ea" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+  <path d="M24 23.5v13M24 30l9-6.5M24 30l9 7.5" stroke="#f4f1e9" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <path d="M50 10v11M44.5 15.5h11M46.6 12.1l6.8 6.8M46.6 18.9l6.8-6.8" stroke="#76b7ff" stroke-width="3" stroke-linecap="round" fill="none" />
+  <circle cx="48.5" cy="41" r="5" fill="#6fe3b5" stroke="#1c212d" stroke-width="1.5" />
+</svg>

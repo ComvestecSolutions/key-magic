@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*.*.*
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version metadata
+        id: version
+        shell: pwsh
+        run: |
+          $tagName = '${{ github.ref_name }}'
+
+          if ($tagName -notmatch '^v(?<version>\d+\.\d+\.\d+)$') {
+            throw "Release tags must use the format vMAJOR.MINOR.PATCH. Received '$tagName'."
+          }
+
+          $releaseVersion = $Matches.version
+          [xml]$props = Get-Content Directory.Build.props
+          $baseVersion = $props.Project.PropertyGroup.VersionPrefix
+
+          if ($baseVersion -ne $releaseVersion) {
+            throw "Tag version '$releaseVersion' does not match Directory.Build.props VersionPrefix '$baseVersion'."
+          }
+
+          "release_version=$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/KeyMagic.Web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/KeyMagic.Web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: src/KeyMagic.Web
+        run: npm run build
+
+      - name: Restore .NET dependencies
+        run: dotnet restore KeyMagic.sln
+
+      - name: Build solution
+        run: dotnet build KeyMagic.sln --configuration Release --no-restore /p:Version=${{ steps.version.outputs.release_version }}
+
+      - name: Publish service
+        run: dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/service/win-x64 --no-restore /p:Version=${{ steps.version.outputs.release_version }}
+
+      - name: Publish tester
+        run: dotnet publish src/KeyMagic.Tester/KeyMagic.Tester.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/tester/win-x64 --no-restore /p:Version=${{ steps.version.outputs.release_version }}
+
+      - name: Create service zip
+        shell: pwsh
+        run: Compress-Archive -Path artifacts/release/service/win-x64/* -DestinationPath artifacts/release/KeyMagic-win-x64-portable.zip -Force
+
+      - name: Create tester zip
+        shell: pwsh
+        run: Compress-Archive -Path artifacts/release/tester/win-x64/* -DestinationPath artifacts/release/KeyMagic.Tester-win-x64.zip -Force
+
+      - name: Upload release artifacts to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: keymagic-release-${{ steps.version.outputs.release_version }}
+          path: |
+            artifacts/release/service/win-x64
+            artifacts/release/tester/win-x64
+            artifacts/release/KeyMagic-win-x64-portable.zip
+            artifacts/release/KeyMagic.Tester-win-x64.zip
+          retention-days: 90
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          make_latest: true
+          files: |
+            artifacts/release/KeyMagic-win-x64-portable.zip
+            artifacts/release/KeyMagic.Tester-win-x64.zip

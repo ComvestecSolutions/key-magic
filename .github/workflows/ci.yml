@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - feature/**
+      - hotfix/**
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/KeyMagic.Web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/KeyMagic.Web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: src/KeyMagic.Web
+        run: npm run build
+
+      - name: Restore .NET dependencies
+        run: dotnet restore KeyMagic.sln
+
+      - name: Build solution
+        run: dotnet build KeyMagic.sln --configuration Release --no-restore
+
+      - name: Publish service
+        run: dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/publish/service/win-x64 --no-restore
+
+      - name: Publish tester
+        run: dotnet publish src/KeyMagic.Tester/KeyMagic.Tester.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/publish/tester/win-x64 --no-restore
+
+      - name: Upload service artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: keymagic-service-win-x64
+          path: artifacts/publish/service/win-x64
+          retention-days: 14
+
+      - name: Upload tester artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: keymagic-tester-win-x64
+          path: artifacts/publish/tester/win-x64
+          retention-days: 14
+
+      - name: Upload SPA web root artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: keymagic-web-root
+          path: src/KeyMagic.Service/wwwroot
+          retention-days: 14

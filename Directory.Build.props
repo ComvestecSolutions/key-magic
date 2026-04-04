@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <Company>Comvestec Solutions</Company>
+    <Authors>Comvestec Solutions</Authors>
+    <Product>Key Magic</Product>
+    <Description>Windows desktop keyboard control, shortcut blocking, and text automation toolkit.</Description>
+    <RepositoryUrl>https://github.com/ComvestecSolutions/key-magic</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <Version Condition="'$(Version)' == ''">$(VersionPrefix)</Version>
+    <AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>
+    <FileVersion>$(VersionPrefix).0</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+</Project>
