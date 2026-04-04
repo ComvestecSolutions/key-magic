@@ -1,5 +1,3 @@
-using System.Text.Json.Serialization;
-
 namespace KeyMagic.Core.Models;
 
 /// <summary>

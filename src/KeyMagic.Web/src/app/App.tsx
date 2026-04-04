@@ -47,14 +47,12 @@ export function App() {
 
       setError(refreshError instanceof Error ? refreshError.message : 'Unable to load dashboard data.')
     } finally {
-      if (refreshId !== latestRefreshId.current) {
-        return
-      }
-
-      if (showLoadingState) {
-        setLoading(false)
-      } else {
-        setRefreshing(false)
+      if (refreshId === latestRefreshId.current) {
+        if (showLoadingState) {
+          setLoading(false)
+        } else {
+          setRefreshing(false)
+        }
       }
     }
   }

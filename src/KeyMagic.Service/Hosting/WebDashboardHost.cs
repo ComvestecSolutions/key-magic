@@ -91,7 +91,7 @@ internal static class WebDashboardHost
     }
 }
 
-internal sealed class DashboardMutationProtector
+public sealed class DashboardMutationProtector
 {
     public const string HeaderName = "X-Admin-Token";
 

@@ -120,8 +120,9 @@ public class ShortcutBlockingService : IDisposable
     }
 
     /// <summary>
-    /// Hook callback : decides whether to block the shortcut based on configured rules.
-    /// Returns true to block, false to pass through.
+    /// Hook callback that logs shortcut events and evaluates whether a rule matched.
+    /// The return value is informational only for the event log's WasBlocked flag;
+    /// actual suppression is handled by HotkeyBlocker via RegisterHotKey.
     /// </summary>
     private bool OnKeyIntercepted(int vkCode, bool ctrl, bool alt, bool shift, bool win,
         string processName, string windowTitle)
@@ -159,7 +160,7 @@ public class ShortcutBlockingService : IDisposable
             };
 
             LogEvent(evt);
-            return true; // Block
+            return true; // Matching rule for logging; HotkeyBlocker performs actual suppression.
         }
 
         // Log pass-through for any shortcut combo (or single key if enabled)
@@ -188,7 +189,7 @@ public class ShortcutBlockingService : IDisposable
             LogEvent(evt);
         }
 
-        return false; // Pass through
+        return false; // No matching rule for logging purposes.
     }
 
     private static bool IsProcessTargeted(BlockingRule rule, string processName)

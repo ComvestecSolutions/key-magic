@@ -110,7 +110,6 @@ public class TrayIconManager : IDisposable
             toggleItem.ForeColor = _configStore.Config.GlobalEnabled
                 ? Color.FromArgb(248, 113, 113) // red for "Disable"
                 : Color.FromArgb(52, 211, 153);  // green for "Enable"
-            UpdateIcon();
         };
         menu.Items.Add(toggleItem);
 

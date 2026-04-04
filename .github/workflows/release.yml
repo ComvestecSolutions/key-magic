@@ -6,7 +6,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
 
 concurrency:
@@ -37,7 +37,13 @@ jobs:
               }
             });
 
-            const mergedPull = pulls.find((pull) => pull.base.ref === 'main' && pull.merged_at);
+            const mergedMainPulls = pulls.filter(
+              (pull) => pull.base.ref === 'main' && pull.merged_at
+            );
+            const mergedPull =
+              mergedMainPulls.find((pull) => pull.merge_commit_sha === context.sha) ??
+              mergedMainPulls
+                .sort((a, b) => Date.parse(b.merged_at) - Date.parse(a.merged_at))[0];
 
             if (!mergedPull) {
               core.setFailed(`Commit ${context.sha} is not associated with a merged pull request into main.`);
@@ -51,6 +57,8 @@ jobs:
   release:
     needs: verify-merge
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -74,7 +82,7 @@ jobs:
 
           $releaseVersion = "$baseVersion-ci.${{ github.run_number }}"
           $shortSha = '${{ github.sha }}'.Substring(0, 7)
-          $releaseNotes = "Automated prerelease from merged PR #$env:PR_NUMBER: $env:PR_TITLE ($shortSha)."
+          $releaseNotes = "Automated prerelease from merged PR #${env:PR_NUMBER}: $env:PR_TITLE ($shortSha)."
 
           "release_version=$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "tag_name=v$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append

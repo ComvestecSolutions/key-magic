@@ -20,6 +20,7 @@ internal static class Win32Interop
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 
+    // Layout assumes a 64-bit process, which matches the app's win-x64 deployment.
     [StructLayout(LayoutKind.Explicit, Size = 40)]
     internal struct INPUT
     {

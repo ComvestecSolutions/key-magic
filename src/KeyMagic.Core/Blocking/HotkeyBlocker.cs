@@ -329,15 +329,26 @@ public class HotkeyBlocker : IDisposable
 
     public void Dispose()
     {
-        if (!_disposed)
-        {
-            Stop();
-            _disposed = true;
-        }
+        Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }
 
-    ~HotkeyBlocker() => Dispose();
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (disposing)
+        {
+            Stop();
+        }
+
+        _disposed = true;
+    }
+
+    ~HotkeyBlocker() => Dispose(disposing: false);
 
     // ═══════════════════════════════════════════════════════════════
     //  Foreground verification for WM_HOTKEY
