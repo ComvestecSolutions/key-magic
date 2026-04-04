@@ -2,8 +2,6 @@
 
 ## Branch model
 
-No commit or release history exists yet in this repository. The workflow files define the intended branch and release model once the initial tracked history is created and the first release is prepared.
-
 - main is the protected integration and release branch.
 - Feature branches should use names such as `feature/*` or `hotfix/*` and target main through pull requests.
 - Only pull requests targeting main run the validation pipeline.
@@ -30,9 +28,10 @@ The CI workflow runs only on pull requests targeting main. It:
 
 1. Installs frontend dependencies with Bun.
 2. Builds the React SPA with Bun and Vite.
-3. Restores and builds the .NET 10 solution.
-4. Publishes self-contained service and tester artifacts for Windows.
-5. Uploads build artifacts, including the generated service web root, for inspection.
+3. Restores the .NET 10 solution with `--runtime win-x64 /p:SelfContained=true` so runtime packs are available for publish.
+4. Builds the release configuration of the solution.
+5. Publishes self-contained `win-x64` service and tester artifacts.
+6. Uploads three workflow artifacts for inspection: the published service directory, the published tester directory, and the generated service web root.
 
 ## Release workflow
 
@@ -40,9 +39,11 @@ The release workflow runs when a merged commit lands on main. It:
 
 1. Reads the base semantic version from Directory.Build.props.
 2. Creates a unique prerelease version in the form MAJOR.MINOR.PATCH-ci.RUN_NUMBER.
-3. Verifies that the main commit is associated with a merged pull request into main.
-4. Builds and publishes the Windows artifacts from the exact main commit with Bun and .NET 10.
-5. Publishes a GitHub prerelease with zipped portable bundles attached.
+3. Verifies that the pushed main commit is associated with a merged pull request into main and derives the release metadata from that PR.
+4. Runs with repository-wide read permissions, then elevates only the release job to `contents: write` for release creation.
+5. Restores, builds, and publishes the Windows artifacts from the exact main commit with Bun and .NET 10.
+6. Uploads the raw published directories and zip bundles as workflow artifacts.
+7. Publishes a GitHub prerelease with the zipped portable bundles attached.
 
 This gives every merge to main a traceable release candidate without forcing the repository to treat each merge as the latest stable release.
 
@@ -56,10 +57,23 @@ For the current automated release path, the intended sequence is:
 
 ## Current artifact set
 
+CI workflow artifacts:
+
+- keymagic-service-win-x64
+- keymagic-tester-win-x64
+- keymagic-web-root
+
+Release workflow artifacts:
+
+- artifacts/release/service/win-x64
+- artifacts/release/tester/win-x64
 - KeyMagic-win-x64-portable.zip
 - KeyMagic.Tester-win-x64.zip
-- Raw published service directory
-- Raw published tester directory
+
+GitHub prerelease attachments:
+
+- KeyMagic-win-x64-portable.zip
+- KeyMagic.Tester-win-x64.zip
 
 ## MSIX note
 

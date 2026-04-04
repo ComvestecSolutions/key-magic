@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from './api'
 import type { CreateBlockingRuleInput, CreateTypingRuleInput, DashboardSnapshot, SettingsUpdateInput, TypingRule } from './types'
 import { EventLogPanel } from '../features/events/EventLogPanel'
@@ -36,10 +36,8 @@ export function App() {
         return
       }
 
-      startTransition(() => {
-        setDashboard(snapshot)
-        setError(null)
-      })
+      setDashboard(snapshot)
+      setError(null)
     } catch (refreshError) {
       if (refreshId !== latestRefreshId.current) {
         return

@@ -83,7 +83,13 @@ internal static class Win32Interop
 
         try
         {
-            GetWindowThreadProcessId(hwnd, out uint pid);
+            uint threadId = GetWindowThreadProcessId(hwnd, out uint pid);
+            if (threadId == 0 || pid == 0)
+            {
+                logger?.LogDebug("GetWindowThreadProcessId failed for window handle with Win32 error {Win32Error}", Marshal.GetLastWin32Error());
+                return string.Empty;
+            }
+
             using var process = Process.GetProcessById((int)pid);
             return process.ProcessName;
         }
@@ -103,7 +109,13 @@ internal static class Win32Interop
 
         try
         {
-            GetWindowThreadProcessId(hwnd, out uint pid);
+            uint threadId = GetWindowThreadProcessId(hwnd, out uint pid);
+            if (threadId == 0 || pid == 0)
+            {
+                logger?.LogDebug("GetWindowThreadProcessId failed for window handle with Win32 error {Win32Error}", Marshal.GetLastWin32Error());
+                return (string.Empty, string.Empty);
+            }
+
             using var process = Process.GetProcessById((int)pid);
 
             var titleBuilder = new StringBuilder(256);

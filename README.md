@@ -19,6 +19,7 @@ Key Magic addresses both sides of that problem:
 - Preserve keyboard observability with a low-level monitoring hook.
 - Trigger fixed-text or clipboard-driven typing rules from hotkeys.
 - Manage everything through a local tray app and modular single-page dashboard.
+- Keep mutating dashboard actions local-only with a per-run admin token on the API.
 
 ## Current architecture
 
@@ -32,13 +33,14 @@ The service now uses a thinner startup layer:
 - `Program.cs` keeps only single-instance bootstrapping.
 - `KeyMagicRuntime` composes the desktop services.
 - `WebDashboardHost` owns API and static asset startup.
-- `FrontendAssetLocator` resolves the published SPA and local development build output.
+- `FrontendAssetLocator` resolves published `wwwroot` assets first, then local `src/KeyMagic.Service/wwwroot`, then `src/KeyMagic.Web/dist` as a fallback.
 
 ## Key capabilities
 
 - OS-level shortcut blocking with process-aware targeting.
 - Typing automation from fixed text or clipboard content.
 - Local dashboard with runtime metrics, rule editing, event log, and settings.
+- Local-only API mutations protected by `X-Admin-Token`, with the bundled SPA handling the token automatically.
 - JSON configuration stored at `%APPDATA%\KeyMagic\config.json`.
 - Self-contained Windows publish output for portable release artifacts.
 
@@ -77,13 +79,18 @@ bun install
 bun run build
 ```
 
+CI uses `bun ci`, but `bun install` is the normal local setup command.
+
 ### Build the desktop host
 
 ```powershell
-dotnet build KeyMagic.sln
+dotnet restore KeyMagic.sln --runtime win-x64 /p:SelfContained=true
+dotnet build KeyMagic.sln --configuration Release --no-restore
 ```
 
 The SPA build writes directly into `src/KeyMagic.Service/wwwroot`, which the desktop host serves locally and includes in publish output.
+
+If you are calling the local API from anything other than the bundled SPA, fetch `GET /api/status` first and send the returned `adminToken` value as the `X-Admin-Token` header on `POST`, `PUT`, `PATCH`, and `DELETE` requests.
 
 ### Run the main app
 
@@ -103,15 +110,15 @@ The repository is set up for a GitHub-flow release model.
 
 - Feature work happens on short-lived branches such as `feature/...` and `hotfix/...`.
 - The validation pipeline runs only on pull requests targeting `main`.
-- A merge commit landing on `main` triggers the release pipeline.
-- The release pipeline rebuilds the merged commit, publishes the Windows artifacts, and creates a GitHub prerelease in the form `vMAJOR.MINOR.PATCH-ci.RUN_NUMBER`.
+- A merge commit landing on `main` triggers the release pipeline after the workflow verifies that the pushed commit belongs to a merged pull request into `main`.
+- The release pipeline rebuilds the merged commit, publishes self-contained `win-x64` Windows artifacts, and creates a GitHub prerelease in the form `vMAJOR.MINOR.PATCH-ci.RUN_NUMBER`.
 - The current version metadata points at `0.1.0` as the base semantic version for merge-driven prereleases.
 
 Current release outputs:
 
-- Portable self-contained Windows build for the main app.
-- Portable self-contained Windows build for the tester.
-- Zipped release bundles attached to GitHub releases.
+- Workflow artifacts for the published service directory, tester directory, and generated SPA web root.
+- Portable self-contained Windows zip bundle for the main app.
+- Portable self-contained Windows zip bundle for the tester.
 
 See `docs/releases.md` for the full branch, validation, and prerelease artifact model.
 
@@ -121,7 +128,6 @@ See `docs/releases.md` for the full branch, validation, and prerelease artifact 
 - Blocking remains a local machine capability; there is no remote service dependency.
 - The release workflow assumes `main` is protected so only reviewed pull requests can merge and trigger prereleases.
 - The current release workflows do not produce MSIX yet because the repository does not include a packaging project or signing configuration.
-- This repository currently has no recorded commit, tag, or release history. The changelog starts from the present project baseline.
 
 ---
 
