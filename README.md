@@ -61,16 +61,18 @@ The service now uses a thinner startup layer:
 
 ### Prerequisites
 
-- .NET 8 SDK
-- Node.js 20+
+- .NET 10 SDK
+- Bun 1.3.11+
 - Windows 10 or Windows 11
+
+The repository pins the .NET SDK with `global.json` and the frontend package manager with `src/KeyMagic.Web/package.json`.
 
 ### Build the SPA
 
 ```powershell
 cd src/KeyMagic.Web
-npm install
-npm run build
+bun install
+bun run build
 ```
 
 ### Build the desktop host

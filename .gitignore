@@ -26,3 +26,5 @@ src/KeyMagic.Web/node_modules/
 src/KeyMagic.Web/dist/
 src/KeyMagic.Service/wwwroot/
 src/KeyMagic.Web/*.tsbuildinfo
+src/KeyMagic.Web/vite.config.js
+src/KeyMagic.Web/vite.config.d.ts

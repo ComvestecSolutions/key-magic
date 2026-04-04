@@ -28,9 +28,9 @@ No commit or release history exists yet in this repository. The workflow files d
 
 The CI workflow runs only on pull requests targeting main. It:
 
-1. Installs frontend dependencies.
-2. Builds the React SPA.
-3. Restores and builds the .NET solution.
+1. Installs frontend dependencies with Bun.
+2. Builds the React SPA with Bun and Vite.
+3. Restores and builds the .NET 10 solution.
 4. Publishes self-contained service and tester artifacts for Windows.
 5. Uploads build artifacts, including the generated service web root, for inspection.
 
@@ -41,7 +41,7 @@ The release workflow runs when a merged commit lands on main. It:
 1. Reads the base semantic version from Directory.Build.props.
 2. Creates a unique prerelease version in the form MAJOR.MINOR.PATCH-ci.RUN_NUMBER.
 3. Verifies that the main commit is associated with a merged pull request into main.
-4. Builds and publishes the Windows artifacts from the exact main commit.
+4. Builds and publishes the Windows artifacts from the exact main commit with Bun and .NET 10.
 5. Publishes a GitHub prerelease with zipped portable bundles attached.
 
 This gives every merge to main a traceable release candidate without forcing the repository to treat each merge as the latest stable release.

@@ -33,7 +33,7 @@ The application stays local-first. All keyboard interception, rule storage, and 
 
 ## Build flow
 
-1. npm build writes the SPA output into src/KeyMagic.Service/wwwroot.
+1. bun run build writes the SPA output into src/KeyMagic.Service/wwwroot.
 2. The desktop host serves generated source wwwroot assets during local development and published wwwroot assets after build or publish.
 3. dotnet build and dotnet publish include the current wwwroot contents without a separate asset-copy step.
 4. dotnet publish produces a self-contained Windows executable bundle.
