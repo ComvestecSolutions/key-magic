@@ -67,11 +67,35 @@ try {
     }
 
     $signature = Get-AuthenticodeSignature -FilePath $ArtifactPath
-    if ($signature.Status -ne 'Valid') {
-        throw "Authenticode signing completed but the signature status is $($signature.Status)."
+    if ($null -eq $signature.SignerCertificate) {
+        throw 'Authenticode signing completed but the artifact does not contain a signer certificate.'
+    }
+
+    $statusMessage = if ([string]::IsNullOrWhiteSpace($signature.StatusMessage)) {
+        'No additional status message was returned.'
+    }
+    else {
+        $signature.StatusMessage.Trim()
+    }
+
+    $isTrustStoreWarning = ($signature.Status -eq 'UnknownError' -or $signature.Status -eq 'NotTrusted') -and (
+        $statusMessage -match 'not trusted' -or
+        $statusMessage -match 'trust provider' -or
+        $statusMessage -match 'trusted root authority'
+    )
+
+    if ($signature.Status -eq 'Valid') {
+        Write-Host "Verified Authenticode signature: $ArtifactPath"
+    }
+    elseif ($isTrustStoreWarning) {
+        Write-Warning "Authenticode signing succeeded, but this runner does not trust the signer certificate chain. Status: $($signature.Status). Message: $statusMessage"
+    }
+    else {
+        throw "Authenticode signing completed but the signature status is $($signature.Status). $statusMessage"
     }
 
     Write-Host "Signed Windows artifact: $ArtifactPath"
+    Write-Host "Signer subject: $($signature.SignerCertificate.Subject)"
 }
 finally {
     if (Test-Path -LiteralPath $certificatePath) {

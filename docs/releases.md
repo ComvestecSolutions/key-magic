@@ -164,6 +164,7 @@ This is the local path to test when you want to confirm the portable single-file
 - Authenticode signing is supported by both release workflows when `WINDOWS_SIGNING_CERT_BASE64` and `WINDOWS_SIGNING_CERT_PASSWORD` are configured as repository secrets.
 - `WINDOWS_SIGNING_TIMESTAMP_URL` is optional. If omitted, the workflows default to `http://timestamp.digicert.com`.
 - The workflows still succeed when signing secrets are absent, but the published executable remains unsigned.
+- Self-signed or privately rooted certificates can sign the executable successfully while GitHub-hosted runners still report the chain as untrusted. The signing script now treats that as a warning when the executable contains a signer certificate, but production releases should still use a publicly trusted code-signing certificate.
 - GitHub provenance attestations are created with `actions/attest@v4` for public repositories. Private repositories need a plan that supports artifact attestations before those steps will run successfully.
 
 ### Setting signing secrets

@@ -38,7 +38,7 @@ reviews:
         Focus on publish model consistency, embedded asset behavior, self-contained and single-file
         settings, and whether project-level changes create divergence between local builds, CI
         validation, and stable release output.
-    - path: **/Directory.Build.props
+    - path: "Directory.Build.props"
       instructions: >-
         Focus on centralized versioning, deterministic build settings, release-debug symbol
         strategy, and whether build metadata changes remain consistent across the solution and
