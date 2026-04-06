@@ -2,7 +2,8 @@
 
 ## Current stable baseline
 
-- `v0.1.0` is the first public stable Key Magic release.
+- `v0.1.1` is the current stable patch release.
+- `v0.1.0` remains the first public stable Key Magic release.
 - Public GitHub downloads currently ship `KeyMagic.exe` and `KeyMagic.exe.sha256`.
 - The stable asset target is a portable, self-contained single-file `win-x64` executable.
 - `KeyMagic.Tester` remains in the repository for diagnostics and is not part of the shipped stable asset set.
@@ -21,7 +22,7 @@
 - Use Semantic Versioning.
 - `VersionPrefix` defines the active release line for merged-main validation builds and future stable tags.
 - Merge-driven mainline validation builds use the internal version form `MAJOR.MINOR.PATCH-ci.RUN_NUMBER`.
-- Stable releases use a clean SemVer tag such as `v0.1.0` without the `-ci.RUN_NUMBER` suffix.
+- Stable releases use a clean SemVer tag such as `v0.1.1` without the `-ci.RUN_NUMBER` suffix.
 - Coordinate any `VersionPrefix` changes with changelog, release notes, and workflow expectations before starting a new stable release line.
 
 ## Stable artifact contract
@@ -38,7 +39,7 @@
 1. Confirm `main` remains protected and that pull requests carry the release-note labels expected by `.github/release.yml`.
 2. Confirm `Directory.Build.props` carries the intended base version for the release line you are promoting.
 3. Update `CHANGELOG.md`, `README.md`, and any user-facing docs when shipped behavior or packaging changes.
-4. If you want curated release notes, update the markdown file you plan to pass as `release_notes_path`, such as `.github/release-notes/v0.1.0.md`.
+4. If you want curated release notes, update the markdown file you plan to pass as `release_notes_path`, such as `.github/release-notes/v0.1.1.md`.
 5. If frontend or asset-hosting behavior changed, run `bun run build` and verify the SPA still lands in `src/KeyMagic.Service/wwwroot`.
 6. If release packaging changed, run the local restore, build, and publish validation steps with `--runtime win-x64 /p:SelfContained=true`.
 7. Decide whether the public release should ship unsigned or whether Authenticode signing secrets must be configured before promotion.
@@ -118,7 +119,7 @@ That workflow:
 11. Publishes the markdown file at `release_notes_path` as the full release body instead when an override is supplied. That file must exist in the selected commit.
 12. Creates a stable GitHub release with a clean SemVer tag such as `v0.1.1`.
 
-`v0.1.0` was published as the first stable baseline using `stable_version: 0.1.0`, and the curated release body lives at `.github/release-notes/v0.1.0.md`.
+`v0.1.0` was published as the first stable baseline using `stable_version: 0.1.0`, and `v0.1.1` continues the release line as the current stable patch release with `.github/release-notes/v0.1.1.md` available as a curated override.
 
 ## Post-release verification
 
@@ -135,7 +136,7 @@ That workflow:
 - Pull requests labeled `enhancement`, `bug`, `documentation`, or `security` are grouped into the matching sections defined in `.github/release.yml`, while `dependencies` is grouped under `Maintenance`.
 - Pull requests labeled `internal` or `skip-release-notes` are excluded from the generated public release notes.
 - Pull requests without a matching label still appear under the catch-all `Other Changes` section so merged work is not silently dropped from a release.
-- `v0.1.0` used `.github/release-notes/v0.1.0.md` as the curated baseline note. Future stable releases can either rely on the generated body or use the same override pattern.
+- `v0.1.0` used `.github/release-notes/v0.1.0.md` as the curated baseline note, and `v0.1.1` uses `.github/release-notes/v0.1.1.md` for the current patch release. Future stable releases can either rely on the generated body or use the same override pattern.
 
 ## Local release testing
 
@@ -148,10 +149,10 @@ bun run build
 
 cd ../..
 dotnet restore KeyMagic.sln --runtime win-x64 /p:SelfContained=true
-dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/service/win-x64 /p:Version=0.1.0 /p:PublishSingleFile=true
+dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/service/win-x64 /p:Version=0.1.1 /p:PublishSingleFile=true
 ```
 
-If you are validating a future stable line, replace `/p:Version=0.1.0` with the version you intend to promote.
+If you are validating a future stable line, replace `/p:Version=0.1.1` with the version you intend to promote.
 
 The resulting local portable executable is:
 
@@ -256,7 +257,7 @@ The current pipeline already covers the baseline for a production-stable release
 - stable tags can be promoted manually from a validated `main` commit,
 - and the shipped artifact contract is explicit and test-enforced.
 
-The main hardening gaps still worth closing after `v0.1.0` are:
+The main hardening gaps still worth closing after `v0.1.1` are:
 
 - provision and rotate a production Authenticode certificate so release signing is consistently active in GitHub,
 - and consider adding an SBOM alongside provenance if you want package inventory in addition to build provenance.

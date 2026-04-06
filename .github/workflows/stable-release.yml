@@ -8,11 +8,11 @@ on:
         required: true
         type: string
       stable_version:
-        description: Stable semantic version without the v prefix, for example 0.1.0
+        description: Stable semantic version without the v prefix, for example 0.1.1
         required: true
         type: string
       release_notes_path:
-        description: Optional markdown file path from the selected commit to use as the full release body, for example .github/release-notes/v0.1.0.md
+        description: Optional markdown file path from the selected commit to use as the full release body, for example .github/release-notes/v0.1.1.md
         required: false
         type: string
 
@@ -38,7 +38,7 @@ jobs:
     steps:
       - name: Validate stable promotion inputs
         id: verify
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           STABLE_VERSION: ${{ inputs.stable_version }}
