@@ -44,7 +44,8 @@ The service now uses a thinner startup layer:
 
 ## Stable release
 
-- `v0.1.0` is the first public stable release of Key Magic.
+- `v0.1.1` is the current stable patch release of Key Magic.
+- `v0.1.0` remains the first public stable release baseline.
 - Stable downloads live on the [GitHub Releases](https://github.com/ComvestecSolutions/key-magic/releases) page for this repository.
 - The shipped asset set is a portable self-contained single-file `win-x64` executable, `KeyMagic.exe`, plus `KeyMagic.exe.sha256` for verification.
 - The app stores configuration at `%APPDATA%\KeyMagic\config.json` and exposes the local dashboard on `http://localhost:5199` by default.
@@ -122,7 +123,7 @@ dotnet run --project src/KeyMagic.Tester/KeyMagic.Tester.csproj
 
 ```powershell
 dotnet restore KeyMagic.sln --runtime win-x64 /p:SelfContained=true
-dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/service/win-x64 /p:Version=0.1.0 /p:PublishSingleFile=true
+dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/service/win-x64 /p:Version=0.1.1 /p:PublishSingleFile=true
 ```
 
 After that publish finishes, test the portable executable at `artifacts/release/service/win-x64/KeyMagic.exe`.
@@ -135,10 +136,10 @@ The repository uses a GitHub-flow release model.
 - The validation pipeline runs only on pull requests targeting `main`.
 - A merge commit landing on `main` triggers the internal mainline release-validation pipeline.
 - The merged-main workflow rebuilds the merged commit, publishes internal workflow artifacts, and does not create a public GitHub prerelease.
-- The current version metadata points at `0.1.0` as the active release line for merged-main validation builds and the first stable public tag.
-- Stable public releases are promoted manually from a validated commit on `main`, so a clean tag such as `v0.1.0` points at a previously verified mainline build.
+- The current version metadata points at `0.1.1` as the active release line for merged-main validation builds and the latest stable public tag.
+- Stable public releases are promoted manually from a validated commit on `main`, so a clean tag such as `v0.1.1` points at a previously verified mainline build.
 - When you run the manual `Stable Release` workflow, enter `stable_version` without the `v` prefix. The workflow publishes the GitHub tag with the prefix added.
-- Stable release notes are auto-generated from pull request labels unless `release_notes_path` supplies a curated markdown body. The first stable release uses `.github/release-notes/v0.1.0.md`.
+- Stable release notes are auto-generated from pull request labels unless `release_notes_path` supplies a curated markdown body. The current patch release uses `.github/release-notes/v0.1.1.md`, while `v0.1.0` used the first stable baseline note.
 
 Current stable release outputs:
 
@@ -163,6 +164,7 @@ See `docs/releases.md` for the full branch, validation, artifact, signing, and s
 - If you only need a local test certificate for workflow validation, generate one with `scripts/new-test-code-signing-cert.ps1` before setting the secrets.
 - Public users should only see stable downloads on the GitHub Releases page; merged-main builds remain validation artifacts rather than public releases.
 - The SPA build output path is part of the release contract. Keep `src/KeyMagic.Service/wwwroot` aligned with the Vite build output unless you also update asset resolution and release automation.
+- `v0.1.1` adds startup diagnostics at `%APPDATA%\KeyMagic\logs\startup.log` and allows the tray app to continue launching even if the local dashboard cannot initialize for that session.
 
 Additional project guidance lives in `CONTRIBUTING.md` and `SECURITY.md`.
 

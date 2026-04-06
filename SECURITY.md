@@ -7,7 +7,7 @@ Key Magic currently supports the latest stable `0.1.x` release line.
 | Version                                            | Supported                                |
 | -------------------------------------------------- | ---------------------------------------- |
 | `0.1.x` stable releases                            | Yes                                      |
-| Merged-main validation builds such as `0.1.0-ci.*` | Best effort, short-lived validation only |
+| Merged-main validation builds such as `0.1.1-ci.*` | Best effort, short-lived validation only |
 | Older stable release lines                         | No                                       |
 | Unreleased feature or hotfix branches              | No                                       |
 

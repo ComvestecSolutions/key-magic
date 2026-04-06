@@ -1,6 +1,6 @@
 # Install Key Magic
 
-Key Magic ships as a portable Windows desktop application. The current stable release line is `v0.1.0`.
+Key Magic ships as a portable Windows desktop application. The current stable release line is `v0.1.1`.
 
 ## What ships in the stable release
 
@@ -42,6 +42,7 @@ If the last line returns `True`, the downloaded executable matches the published
 - No blocking rules or typing macros exist until you create them.
 - The tray icon is visible by default.
 - The dashboard listens on `http://localhost:5199` unless `webDashboardPort` is changed later in settings or config.
+- Startup diagnostics are written to `%APPDATA%\KeyMagic\logs\startup.log` when startup fails or the dashboard is unavailable.
 - All keyboard handling and API requests stay on the local machine.
 
 ## Updating or removing Key Magic

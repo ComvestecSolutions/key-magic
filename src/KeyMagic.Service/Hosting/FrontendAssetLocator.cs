@@ -4,10 +4,6 @@ using Microsoft.Extensions.FileProviders;
 
 internal static class FrontendAssetLocator
 {
-    private static readonly FrontendAssetRoot EmbeddedAssetRoot = new(
-        new ManifestEmbeddedFileProvider(typeof(FrontendAssetLocator).Assembly, "wwwroot"),
-        "embedded-wwwroot");
-
     public sealed record FrontendAssetRoot(IFileProvider FileProvider, string Source, string? PhysicalRootPath = null);
 
     public static FrontendAssetRoot? Resolve()
@@ -20,12 +16,28 @@ internal static class FrontendAssetLocator
             }
         }
 
-        if (EmbeddedAssetRoot.FileProvider.GetFileInfo("index.html").Exists)
+        var embeddedAssetRoot = TryResolveEmbeddedAssetRoot();
+        if (embeddedAssetRoot?.FileProvider.GetFileInfo("index.html").Exists == true)
         {
-            return EmbeddedAssetRoot;
+            return embeddedAssetRoot;
         }
 
         return null;
+    }
+
+    private static FrontendAssetRoot? TryResolveEmbeddedAssetRoot()
+    {
+        try
+        {
+            return new FrontendAssetRoot(
+                new ManifestEmbeddedFileProvider(typeof(FrontendAssetLocator).Assembly, "wwwroot"),
+                "embedded-wwwroot");
+        }
+        catch (Exception ex)
+        {
+            StartupDiagnostics.RecordException("Failed to initialize embedded dashboard asset provider", ex);
+            return null;
+        }
     }
 
     private static IEnumerable<FrontendAssetRoot> EnumerateCandidates()

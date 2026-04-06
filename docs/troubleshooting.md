@@ -6,6 +6,13 @@
 - Browse to `http://localhost:5199` directly. If the port was changed, inspect `%APPDATA%\KeyMagic\config.json` for `webDashboardPort`.
 - The dashboard is local-only. Open it from the same machine where Key Magic is running.
 - If another process already uses the configured port, stop Key Magic, choose a free port in config or settings, and then start the app again.
+- Review `%APPDATA%\KeyMagic\logs\startup.log` for bootstrap failures, missing embedded assets, or dashboard startup exceptions.
+
+## The tray app starts but the dashboard is unavailable
+
+- `v0.1.1` allows the tray host to continue running even if the local dashboard fails for the current session.
+- Open `%APPDATA%\KeyMagic\logs\startup.log` to identify the startup failure.
+- Fix the underlying dashboard issue and then restart Key Magic.
 
 ## App exits before the tray icon appears
 
