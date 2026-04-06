@@ -1,0 +1,36 @@
+changelog:
+  exclude:
+    labels:
+      - internal
+      - skip-release-notes
+  categories:
+    - title: Breaking Changes
+      labels:
+        - breaking-change
+        - release/breaking
+    - title: Features
+      labels:
+        - enhancement
+        - type/feature
+    - title: Bug Fixes
+      labels:
+        - bug
+        - type/bug
+    - title: Security
+      labels:
+        - security
+        - type/security
+    - title: Documentation
+      labels:
+        - documentation
+        - type/docs
+    - title: Maintenance
+      labels:
+        - dependencies
+        - chore
+        - type/chore
+        - build
+        - ci
+    - title: Other Changes
+      labels:
+        - "*"

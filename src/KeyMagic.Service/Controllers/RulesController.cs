@@ -177,6 +177,12 @@ public class RulesController : ControllerBase
             foreach (var rule in config.Rules)
             {
                 if (!request.Ids.Contains(rule.Id)) continue;
+                if (request.DisplayName != null) rule.Shortcut.DisplayName = request.DisplayName;
+                if (request.VirtualKeyCode.HasValue) rule.Shortcut.VirtualKeyCode = request.VirtualKeyCode.Value;
+                if (request.Ctrl.HasValue) rule.Shortcut.Ctrl = request.Ctrl.Value;
+                if (request.Alt.HasValue) rule.Shortcut.Alt = request.Alt.Value;
+                if (request.Shift.HasValue) rule.Shortcut.Shift = request.Shift.Value;
+                if (request.Win.HasValue) rule.Shortcut.Win = request.Win.Value;
                 if (request.TargetProcesses != null) rule.TargetProcesses = request.TargetProcesses;
                 if (request.Enabled.HasValue) rule.Enabled = request.Enabled.Value;
                 if (request.Description != null) rule.Description = request.Description;
@@ -244,6 +250,8 @@ public class BatchShortcutItem
 
 public class BatchCreateRequest
 {
+    [Required]
+    [MinLength(1)]
     public List<BatchShortcutItem> Shortcuts { get; set; } = new();
     public List<string>? TargetProcesses { get; set; }
     public bool Enabled { get; set; } = true;
@@ -251,19 +259,38 @@ public class BatchCreateRequest
 
 public class BatchDeleteRequest
 {
+    [Required]
+    [MinLength(1)]
     public List<string> Ids { get; set; } = new();
 }
 
 public class BatchToggleRequest
 {
+    [Required]
+    [MinLength(1)]
     public List<string> Ids { get; set; } = new();
     public bool Enabled { get; set; }
 }
 
 public class BatchUpdateRequest
 {
+    [Required]
+    [MinLength(1)]
     public List<string> Ids { get; set; } = new();
+
+    [StringLength(200, MinimumLength = 1)]
+    public string? DisplayName { get; set; }
+
+    [Range(1, 255)]
+    public int? VirtualKeyCode { get; set; }
+    public bool? Ctrl { get; set; }
+    public bool? Alt { get; set; }
+    public bool? Shift { get; set; }
+    public bool? Win { get; set; }
+
     public List<string>? TargetProcesses { get; set; }
     public bool? Enabled { get; set; }
+
+    [StringLength(500)]
     public string? Description { get; set; }
 }

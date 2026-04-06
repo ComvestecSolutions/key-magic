@@ -70,22 +70,12 @@ public class TypingController : ControllerBase
         TypingRule? updated = null;
         _configStore.Update(config =>
         {
-            var rule = config.TypingRules.Find(r => r.Id == id);
-            if (rule == null) return;
+            var ruleIndex = config.TypingRules.FindIndex(r => r.Id == id);
+            if (ruleIndex < 0) return;
 
-            if (request.Name != null) rule.Name = request.Name;
-            if (request.DisplayName != null) rule.Hotkey.DisplayName = request.DisplayName;
-            if (request.VirtualKeyCode.HasValue) rule.Hotkey.VirtualKeyCode = request.VirtualKeyCode.Value;
-            if (request.Ctrl.HasValue) rule.Hotkey.Ctrl = request.Ctrl.Value;
-            if (request.Alt.HasValue) rule.Hotkey.Alt = request.Alt.Value;
-            if (request.Shift.HasValue) rule.Hotkey.Shift = request.Shift.Value;
-            if (request.Win.HasValue) rule.Hotkey.Win = request.Win.Value;
-            if (request.Source.HasValue) rule.Source = request.Source.Value;
-            if (request.Text != null) rule.Text = request.Text;
-            if (request.InterKeyDelayMs.HasValue) rule.InterKeyDelayMs = request.InterKeyDelayMs.Value;
-            if (request.Enabled.HasValue) rule.Enabled = request.Enabled.Value;
-
-            updated = rule;
+            var patchedRule = PatchTypingRule(config.TypingRules[ruleIndex], request);
+            config.TypingRules[ruleIndex] = patchedRule;
+            updated = patchedRule;
         });
 
         if (updated == null) return NotFound();
@@ -140,34 +130,123 @@ public class TypingController : ControllerBase
         _typingService.TriggerTyping(text, rule.InterKeyDelayMs, preDelay);
         return Ok(new { queued = true, length = text.Length, preDelayMs = preDelay });
     }
+
+    private static TypingRule PatchTypingRule(TypingRule existingRule, UpdateTypingRuleRequest request)
+    {
+        var patchedRule = existingRule.Clone();
+
+        if (!string.IsNullOrWhiteSpace(request.Name))
+        {
+            patchedRule.Name = request.Name;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.DisplayName))
+        {
+            patchedRule.Hotkey.DisplayName = request.DisplayName;
+        }
+
+        if (request.VirtualKeyCode.HasValue)
+        {
+            patchedRule.Hotkey.VirtualKeyCode = request.VirtualKeyCode.Value;
+        }
+
+        if (request.Ctrl.HasValue)
+        {
+            patchedRule.Hotkey.Ctrl = request.Ctrl.Value;
+        }
+
+        if (request.Alt.HasValue)
+        {
+            patchedRule.Hotkey.Alt = request.Alt.Value;
+        }
+
+        if (request.Shift.HasValue)
+        {
+            patchedRule.Hotkey.Shift = request.Shift.Value;
+        }
+
+        if (request.Win.HasValue)
+        {
+            patchedRule.Hotkey.Win = request.Win.Value;
+        }
+
+        if (request.Source.HasValue)
+        {
+            patchedRule.Source = request.Source.Value;
+        }
+
+        if (request.Text != null)
+        {
+            patchedRule.Text = request.Text;
+        }
+
+        if (request.InterKeyDelayMs.HasValue)
+        {
+            patchedRule.InterKeyDelayMs = request.InterKeyDelayMs.Value;
+        }
+
+        if (request.Enabled.HasValue)
+        {
+            patchedRule.Enabled = request.Enabled.Value;
+        }
+
+        return patchedRule;
+    }
 }
 
 // ─── Request DTOs ──────────────────────────────────────────────────────────────
 
-public record CreateTypingRuleRequest(
-    string? Name,
-    string? DisplayName,
-    [property: Range(1, 255)] int VirtualKeyCode,
-    bool Ctrl,
-    bool Alt,
-    bool Shift,
-    bool Win,
-    TextSource Source,
-    [property: MaxLength(10000)] string? Text,
-    [property: Range(0, 10000)] int? InterKeyDelayMs,
-    bool? Enabled);
+public class CreateTypingRuleRequest
+{
+    public string? Name { get; set; }
+    public string? DisplayName { get; set; }
 
-public record UpdateTypingRuleRequest(
-    string? Name,
-    string? DisplayName,
-    [property: Range(1, 255)] int? VirtualKeyCode,
-    bool? Ctrl,
-    bool? Alt,
-    bool? Shift,
-    bool? Win,
-    TextSource? Source,
-    [property: MaxLength(10000)] string? Text,
-    [property: Range(0, 10000)] int? InterKeyDelayMs,
-    bool? Enabled);
+    [Range(1, 255)]
+    public int VirtualKeyCode { get; set; }
 
-public record FireTypingRequest([property: MaxLength(10000)] string? Text, [property: Range(0, 60000)] int? PreDelayMs);
+    public bool Ctrl { get; set; }
+    public bool Alt { get; set; }
+    public bool Shift { get; set; }
+    public bool Win { get; set; }
+    public TextSource Source { get; set; }
+
+    [MaxLength(10000)]
+    public string? Text { get; set; }
+
+    [Range(0, 10000)]
+    public int? InterKeyDelayMs { get; set; }
+
+    public bool? Enabled { get; set; }
+}
+
+public class UpdateTypingRuleRequest
+{
+    public string? Name { get; set; }
+    public string? DisplayName { get; set; }
+
+    [Range(1, 255)]
+    public int? VirtualKeyCode { get; set; }
+
+    public bool? Ctrl { get; set; }
+    public bool? Alt { get; set; }
+    public bool? Shift { get; set; }
+    public bool? Win { get; set; }
+    public TextSource? Source { get; set; }
+
+    [MaxLength(10000)]
+    public string? Text { get; set; }
+
+    [Range(0, 10000)]
+    public int? InterKeyDelayMs { get; set; }
+
+    public bool? Enabled { get; set; }
+}
+
+public class FireTypingRequest
+{
+    [MaxLength(10000)]
+    public string? Text { get; set; }
+
+    [Range(0, 60000)]
+    public int? PreDelayMs { get; set; }
+}

@@ -23,7 +23,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.201
+          dotnet-version: 10.0.x
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -45,28 +45,15 @@ jobs:
         run: dotnet build KeyMagic.sln --configuration Release --no-restore
 
       - name: Publish service
-        run: dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/publish/service/win-x64 --no-restore
+        run: dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/publish/service/win-x64 --no-restore /p:PublishSingleFile=true
 
-      - name: Publish tester
-        run: dotnet publish src/KeyMagic.Tester/KeyMagic.Tester.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/publish/tester/win-x64 --no-restore
+      - name: Assert single-file publish asset
+        shell: pwsh
+        run: ./scripts/assert-portable-publish-assets.ps1 -ServicePublishDir artifacts/publish/service/win-x64
 
       - name: Upload service artifact
         uses: actions/upload-artifact@v4
         with:
-          name: keymagic-service-win-x64
-          path: artifacts/publish/service/win-x64
-          retention-days: 14
-
-      - name: Upload tester artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: keymagic-tester-win-x64
-          path: artifacts/publish/tester/win-x64
-          retention-days: 14
-
-      - name: Upload SPA web root artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: keymagic-web-root
-          path: src/KeyMagic.Service/wwwroot
+          name: keymagic-win-x64-exe
+          path: artifacts/publish/service/win-x64/KeyMagic.exe
           retention-days: 14

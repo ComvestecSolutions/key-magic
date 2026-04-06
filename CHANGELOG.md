@@ -1,19 +1,24 @@
 # Changelog
 
-This file documents the current Key Magic repository baseline.
+This file documents public stable Key Magic releases. Internal merged-main validation builds use `MAJOR.MINOR.PATCH-ci.RUN_NUMBER` and remain workflow artifacts rather than changelog entries.
 
-It currently summarizes the shipped project baseline rather than acting as a complete tagged-release ledger.
+## [0.1.0] - 2026-04-06
 
-## [Current Baseline]
+### Added
 
-### Included
+- Process-aware shortcut blocking with global or targeted rules for Windows applications.
+- Low-level keyboard monitoring, recent event history, and tray-hosted runtime visibility.
+- Hotkey-driven typing automation with fixed-text and clipboard-backed macros using Unicode `SendInput`.
+- Local dashboard for status, rules, typing actions, event inspection, and settings.
+- Atomic JSON configuration stored at `%APPDATA%\KeyMagic\config.json`.
 
-- Key Magic branding, centralized version metadata, and .NET 10 / Bun toolchain setup.
-- Dual-path keyboard handling with low-level monitoring plus foreground-aware `RegisterHotKey` blocking.
-- Typing automation with fixed-text or clipboard-driven rules and Unicode `SendInput` injection.
-- Modular service hosting layer for the tray app, localhost API, and bundled web dashboard.
-- Local dashboard mutation protection via per-run `X-Admin-Token` headers.
-- React, TypeScript, and Vite single-page application for status, rules, typing, events, and settings.
-- GitHub Actions workflows for pull-request validation and merged-main self-contained `win-x64` prereleases.
-- Windows service and tester projects that build as KeyMagic and KeyMagic.Tester.
-- Local configuration stored atomically at `%APPDATA%\KeyMagic\config.json`.
+### Release
+
+- First public stable Key Magic release published as a portable, self-contained single-file `win-x64` executable.
+- Stable release assets include `KeyMagic.exe` and `KeyMagic.exe.sha256`.
+- Release automation supports optional Authenticode signing and GitHub provenance attestations.
+- `KeyMagic.Tester` remains in the repository for diagnostics and manual validation but is not part of the shipped stable asset set.
+
+### Tooling
+
+- .NET 10 and Bun-based build toolchain with pull-request validation, merged-main validation artifacts, and manual stable-release promotion from validated `main` commits.

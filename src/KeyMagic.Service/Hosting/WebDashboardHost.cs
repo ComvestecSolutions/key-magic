@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -24,7 +25,7 @@ internal static class WebDashboardHost
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             ContentRootPath = AppContext.BaseDirectory,
-            WebRootPath = frontendAssets?.RootPath
+            WebRootPath = frontendAssets?.PhysicalRootPath
         });
 
         builder.Services.AddSingleton(configStore);
@@ -71,23 +72,64 @@ internal static class WebDashboardHost
             await next();
         });
 
+        app.MapControllers();
+
         if (frontendAssets != null)
         {
-            app.UseDefaultFiles();
-            app.UseStaticFiles();
-            app.MapFallbackToFile("index.html");
-            startupLogger.LogInformation("Serving dashboard assets from {Source} at {Path}", frontendAssets.Source, frontendAssets.RootPath);
+            app.UseDefaultFiles(new DefaultFilesOptions
+            {
+                FileProvider = frontendAssets.FileProvider
+            });
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = frontendAssets.FileProvider
+            });
+            app.MapFallback(context => ServeDashboardIndexAsync(context, frontendAssets.FileProvider));
+
+            if (frontendAssets.PhysicalRootPath is not null)
+            {
+                startupLogger.LogInformation("Serving dashboard assets from {Source} at {Path}", frontendAssets.Source, frontendAssets.PhysicalRootPath);
+            }
+            else
+            {
+                startupLogger.LogInformation("Serving dashboard assets from {Source} bundled inside KeyMagic.exe", frontendAssets.Source);
+            }
         }
         else
         {
             startupLogger.LogWarning("No dashboard assets were found. The API will start without a web UI.");
         }
-
-        app.MapControllers();
         app.Start();
 
         startupLogger.LogInformation("KeyMagic dashboard: http://localhost:{Port}", port);
         return app;
+    }
+
+    private static async Task ServeDashboardIndexAsync(HttpContext context, IFileProvider fileProvider)
+    {
+        if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        var indexFile = fileProvider.GetFileInfo("index.html");
+        if (!indexFile.Exists)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        context.Response.ContentType = "text/html; charset=utf-8";
+        context.Response.ContentLength = indexFile.Length;
+
+        if (HttpMethods.IsHead(context.Request.Method))
+        {
+            return;
+        }
+
+        await using var stream = indexFile.CreateReadStream();
+        await stream.CopyToAsync(context.Response.Body);
     }
 }
 

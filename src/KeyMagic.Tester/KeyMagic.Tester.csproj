@@ -5,6 +5,14 @@
     <OutputType>WinExe</OutputType>
     <AssemblyName>KeyMagic.Tester</AssemblyName>
     <RootNamespace>KeyMagic.Tester</RootNamespace>
+    <ApplicationIcon>..\KeyMagic.Service\Assets\KeyMagic.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\KeyMagic.Service\Assets\KeyMagic.ico" Link="KeyMagic.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
 
 </Project>

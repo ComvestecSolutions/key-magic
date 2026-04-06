@@ -6,7 +6,35 @@
     <AssemblyName>KeyMagic</AssemblyName>
     <RootNamespace>KeyMagic.Service</RootNamespace>
     <ApplicationIcon>Assets\KeyMagic.ico</ApplicationIcon>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <PublishSingleFile Condition="'$(Configuration)' == 'Release'">true</PublishSingleFile>
+    <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract Condition="'$(Configuration)' == 'Release'">true</IncludeNativeLibrariesForSelfExtract>
+    <PublishIISAssets Condition="'$(Configuration)' == 'Release'">false</PublishIISAssets>
+    <IsTransformWebConfigDisabled Condition="'$(Configuration)' == 'Release'">true</IsTransformWebConfigDisabled>
+    <StaticWebAssetsEnabled Condition="'$(Configuration)' == 'Release'">false</StaticWebAssetsEnabled>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Remove="artifacts\**\*" />
+    <None Remove="artifacts\**\*" />
+
+    <None Update="Assets\KeyMagic.ico">
+      <TargetPath>KeyMagic.ico</TargetPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
+
+    <Content Update="appsettings.json">
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </Content>
+
+    <Content Update="wwwroot\**\*">
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </Content>
+
+    <EmbeddedResource Include="wwwroot\**\*" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\KeyMagic.Core\KeyMagic.Core.csproj" />

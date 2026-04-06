@@ -1,7 +1,10 @@
 import type {
+  BatchCreateBlockingRulesInput,
+  BatchUpdateBlockingRulesInput,
   CreateBlockingRuleInput,
   CreateTypingRuleInput,
   DashboardSnapshot,
+  KeyMagicConfig,
   SettingsUpdateInput,
   StatusSnapshot,
   StatusStats,
@@ -9,34 +12,84 @@ import type {
   ProcessInfo,
   ShortcutEvent,
   TypingRule,
+  UpdateBlockingRuleInput,
+  UpdateTypingRuleInput,
 } from "./types";
 
-let adminToken: string | null = null;
+interface RequestOptions {
+  allowAdminTokenRefresh?: boolean;
+  skipAdminToken?: boolean;
+}
+
+const dashboardSession = {
+  adminToken: null as string | null,
+  refreshPromise: null as Promise<string> | null,
+};
+
+function setAdminToken(token: string) {
+  dashboardSession.adminToken = token;
+}
+
+async function refreshAdminToken(forceRefresh = false): Promise<string> {
+  if (!forceRefresh && dashboardSession.adminToken !== null) {
+    return dashboardSession.adminToken;
+  }
+
+  if (dashboardSession.refreshPromise === null) {
+    dashboardSession.refreshPromise = requestRequired<StatusSnapshot>(
+      "/api/status",
+      undefined,
+      {
+        allowAdminTokenRefresh: false,
+        skipAdminToken: true,
+      },
+    )
+      .then((status) => {
+        setAdminToken(status.adminToken);
+        return status.adminToken;
+      })
+      .finally(() => {
+        dashboardSession.refreshPromise = null;
+      });
+  }
+
+  return dashboardSession.refreshPromise;
+}
 
 async function request<T>(
   path: string,
   init?: RequestInit,
+  options: RequestOptions = {},
 ): Promise<T | undefined> {
+  const { allowAdminTokenRefresh = true, skipAdminToken = false } = options;
   const method = init?.method?.toUpperCase() ?? "GET";
-  const requiresAdminToken = !["GET", "HEAD", "OPTIONS"].includes(method);
-
-  if (requiresAdminToken && adminToken === null) {
-    throw new Error(
-      "Dashboard session token is unavailable. Refresh the page and try again.",
-    );
-  }
+  const requiresAdminToken =
+    !skipAdminToken && !["GET", "HEAD", "OPTIONS"].includes(method);
 
   const headers = new Headers(init?.headers);
-  headers.set("Content-Type", "application/json");
-
-  if (requiresAdminToken && adminToken !== null) {
-    headers.set("X-Admin-Token", adminToken);
+  if (init?.body !== undefined && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(path, {
+  if (requiresAdminToken) {
+    headers.set("X-Admin-Token", await refreshAdminToken());
+  }
+
+  const buildRequestInit = (): RequestInit => ({
     ...init,
     headers,
   });
+
+  let response = await fetch(path, buildRequestInit());
+
+  if (
+    requiresAdminToken
+    && allowAdminTokenRefresh
+    && (response.status === 401 || response.status === 403)
+  ) {
+    headers.set("X-Admin-Token", await refreshAdminToken(true));
+    response = await fetch(path, buildRequestInit());
+  }
 
   if (!response.ok) {
     let message = response.statusText;
@@ -50,7 +103,7 @@ async function request<T>(
   }
 
   if (response.status === 204) {
-    return undefined as T;
+    return undefined;
   }
 
   const text = await response.text();
@@ -60,8 +113,9 @@ async function request<T>(
 async function requestRequired<T>(
   path: string,
   init?: RequestInit,
+  options?: RequestOptions,
 ): Promise<T> {
-  const result = await request<T>(path, init);
+  const result = await request<T>(path, init, options);
   if (result === undefined) {
     throw new Error(`Expected a response body from ${path}.`);
   }
@@ -70,7 +124,7 @@ async function requestRequired<T>(
 }
 
 async function requestVoid(path: string, init?: RequestInit): Promise<void> {
-  await request(path, init);
+  await request<never>(path, init);
 }
 
 export const api = {
@@ -85,7 +139,7 @@ export const api = {
         requestRequired<ProcessInfo[]>("/api/processes"),
       ]);
 
-    adminToken = status.adminToken;
+    setAdminToken(status.adminToken);
 
     return { status, stats, rules, typingRules, events, processes };
   },
@@ -143,5 +197,71 @@ export const api = {
 
   clearEvents(): Promise<void> {
     return requestVoid("/api/status/events", { method: "DELETE" });
+  },
+
+  updateRule(
+    id: string,
+    input: UpdateBlockingRuleInput,
+  ): Promise<BlockingRule> {
+    return requestRequired(`/api/rules/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateTypingRule(
+    id: string,
+    input: UpdateTypingRuleInput,
+  ): Promise<TypingRule> {
+    return requestRequired(`/api/typing/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  },
+
+  exportConfig(): Promise<KeyMagicConfig> {
+    return requestRequired("/api/status/config");
+  },
+
+  importConfig(config: KeyMagicConfig): Promise<{ success: boolean }> {
+    return requestRequired("/api/status/config", {
+      method: "PUT",
+      body: JSON.stringify(config),
+    });
+  },
+
+  batchDeleteRules(ids: string[]): Promise<{ removed: number }> {
+    return requestRequired("/api/rules/batch", {
+      method: "DELETE",
+      body: JSON.stringify({ ids }),
+    });
+  },
+
+  batchCreateRules(
+    input: BatchCreateBlockingRulesInput,
+  ): Promise<BlockingRule[]> {
+    return requestRequired("/api/rules/batch", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  batchToggleRules(
+    ids: string[],
+    enabled: boolean,
+  ): Promise<{ updated: number; enabled: boolean }> {
+    return requestRequired("/api/rules/batch-toggle", {
+      method: "POST",
+      body: JSON.stringify({ ids, enabled }),
+    });
+  },
+
+  batchUpdateRules(
+    input: BatchUpdateBlockingRulesInput,
+  ): Promise<{ updated: number }> {
+    return requestRequired("/api/rules/batch", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
   },
 };

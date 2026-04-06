@@ -17,7 +17,10 @@ export interface BlockingRule {
   createdAt: string;
 }
 
-export type TextSource = 0 | 1;
+export enum TextSource {
+  FixedText = 0,
+  Clipboard = 1,
+}
 
 export interface TypingRule {
   id: string;
@@ -117,4 +120,77 @@ export interface SettingsUpdateInput {
   startEnabled: boolean;
   notificationSound: boolean;
   notificationDurationMs: number;
+}
+
+export interface UpdateBlockingRuleInput {
+  displayName?: string;
+  virtualKeyCode?: number;
+  ctrl?: boolean;
+  alt?: boolean;
+  shift?: boolean;
+  win?: boolean;
+  targetProcesses?: string[];
+  description?: string;
+  enabled?: boolean;
+}
+
+export interface UpdateTypingRuleInput {
+  name?: string;
+  displayName?: string;
+  virtualKeyCode?: number;
+  ctrl?: boolean;
+  alt?: boolean;
+  shift?: boolean;
+  win?: boolean;
+  source?: TextSource;
+  text?: string;
+  interKeyDelayMs?: number;
+  enabled?: boolean;
+}
+
+export interface KeyMagicConfig {
+  globalEnabled: boolean;
+  rules: BlockingRule[];
+  webDashboardPort: number;
+  showNotifications: boolean;
+  trayIconVisible: boolean;
+  logPassThrough: boolean;
+  allowSingleKeyBlocking: boolean;
+  maxLogEntries: number;
+  startWithWindows: boolean;
+  startEnabled: boolean;
+  activeProfile: string;
+  profiles: Record<string, string[]>;
+  notificationSound: boolean;
+  notificationDurationMs: number;
+  typingRules: TypingRule[];
+}
+
+export interface BatchBlockingShortcutInput {
+  displayName: string;
+  virtualKeyCode: number;
+  ctrl: boolean;
+  alt: boolean;
+  shift: boolean;
+  win: boolean;
+  description?: string;
+}
+
+export interface BatchCreateBlockingRulesInput {
+  shortcuts: BatchBlockingShortcutInput[];
+  targetProcesses?: string[];
+  enabled: boolean;
+}
+
+export interface BatchUpdateBlockingRulesInput {
+  ids: string[];
+  displayName?: string;
+  virtualKeyCode?: number;
+  ctrl?: boolean;
+  alt?: boolean;
+  shift?: boolean;
+  win?: boolean;
+  targetProcesses?: string[];
+  enabled?: boolean;
+  description?: string;
 }

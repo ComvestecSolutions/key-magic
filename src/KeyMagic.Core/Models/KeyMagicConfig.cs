@@ -9,7 +9,7 @@ public class KeyMagicConfig
     public bool GlobalEnabled { get; set; } = false;
 
     /// <summary>All configured blocking rules.</summary>
-    public List<BlockingRule> Rules { get; set; } = CreateDefaultRules();
+    public List<BlockingRule> Rules { get; set; } = new();
 
     /// <summary>Port for the local web dashboard.</summary>
     public int WebDashboardPort { get; set; } = 5199;
@@ -57,7 +57,7 @@ public class KeyMagicConfig
         return new KeyMagicConfig
         {
             GlobalEnabled = GlobalEnabled,
-            Rules = Rules?.Select(rule => rule.Clone()).ToList() ?? CreateDefaultRules(),
+            Rules = Rules?.Select(rule => rule.Clone()).ToList() ?? new List<BlockingRule>(),
             WebDashboardPort = WebDashboardPort,
             ShowNotifications = ShowNotifications,
             TrayIconVisible = TrayIconVisible,
@@ -71,37 +71,6 @@ public class KeyMagicConfig
             NotificationSound = NotificationSound,
             NotificationDurationMs = NotificationDurationMs,
             TypingRules = TypingRules?.Select(rule => rule.Clone()).ToList() ?? new List<TypingRule>()
-        };
-    }
-
-    private static List<BlockingRule> CreateDefaultRules()
-    {
-        return new List<BlockingRule>
-        {
-            new()
-            {
-                Shortcut = new ShortcutKey
-                {
-                    DisplayName = "Alt+Tab",
-                    VirtualKeyCode = 0x09,
-                    Alt = true
-                },
-                TargetProcesses = new List<string>(),
-                Enabled = false,
-                Description = "Block Alt+Tab (example: disabled by default)"
-            },
-            new()
-            {
-                Shortcut = new ShortcutKey
-                {
-                    DisplayName = "Ctrl+W",
-                    VirtualKeyCode = 0x57,
-                    Ctrl = true
-                },
-                TargetProcesses = new List<string> { "chrome", "msedge", "firefox" },
-                Enabled = false,
-                Description = "Prevent accidental tab close in browsers"
-            }
         };
     }
 

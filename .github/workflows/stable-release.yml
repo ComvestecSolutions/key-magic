@@ -1,0 +1,232 @@
+name: Stable Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Validated commit SHA from main to promote, for example a1b2c3d4e5f6
+        required: true
+        type: string
+      stable_version:
+        description: Stable semantic version without the v prefix, for example 0.1.0
+        required: true
+        type: string
+      release_notes_path:
+        description: Optional markdown file path from the selected commit to use as the full release body, for example .github/release-notes/v0.1.0.md
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stable-release-${{ inputs.stable_version }}
+  cancel-in-progress: false
+
+jobs:
+  verify-source:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    outputs:
+      target_sha: ${{ steps.verify.outputs.target_sha }}
+      stable_tag: ${{ steps.verify.outputs.stable_tag }}
+      release_name: ${{ steps.verify.outputs.release_name }}
+      release_notes_path: ${{ steps.verify.outputs.release_notes_path }}
+
+    steps:
+      - name: Validate stable promotion inputs
+        id: verify
+        uses: actions/github-script@v7
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          STABLE_VERSION: ${{ inputs.stable_version }}
+          RELEASE_NOTES_PATH: ${{ inputs.release_notes_path }}
+        with:
+          script: |
+            const sourceSha = process.env.SOURCE_SHA.trim();
+            const stableVersion = process.env.STABLE_VERSION;
+            const stableTag = `v${stableVersion}`;
+            const releaseNotesPath = (process.env.RELEASE_NOTES_PATH ?? '').trim();
+
+            if (!/^[0-9a-f]{7,40}$/i.test(sourceSha)) {
+              core.setFailed(`Source SHA must be a 7-40 character commit SHA. Received: ${sourceSha}`);
+              return;
+            }
+
+            if (!/^\d+\.\d+\.\d+$/.test(stableVersion)) {
+              core.setFailed(`Stable version must look like MAJOR.MINOR.PATCH. Received: ${stableVersion}`);
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const commit = await github.rest.repos.getCommit({
+              owner,
+              repo,
+              ref: sourceSha
+            });
+
+            const comparison = await github.rest.repos.compareCommitsWithBasehead({
+              owner,
+              repo,
+              basehead: `${commit.data.sha}...main`
+            });
+
+            if (!(comparison.data.status === 'ahead' || comparison.data.status === 'identical')) {
+              core.setFailed(`Commit ${commit.data.sha} cannot be promoted because compareCommitsWithBasehead returned status ${comparison.data.status}. The source commit must be identical to main or an ancestor of main.`);
+              return;
+            }
+
+            try {
+              await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: `tags/${stableTag}`
+              });
+
+              core.setFailed(`Stable tag ${stableTag} already exists.`);
+              return;
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
+
+            const targetSha = commit.data.sha;
+
+            if (releaseNotesPath) {
+              let contentResponse;
+
+              try {
+                contentResponse = await github.rest.repos.getContent({
+                  owner,
+                  repo,
+                  path: releaseNotesPath,
+                  ref: targetSha
+                });
+              } catch (error) {
+                if (error.status === 404) {
+                  core.setFailed(`Release notes override file ${releaseNotesPath} was not found in commit ${targetSha}.`);
+                  return;
+                }
+
+                throw error;
+              }
+
+              if (Array.isArray(contentResponse.data) || contentResponse.data.type !== 'file') {
+                core.setFailed(`Release notes override path ${releaseNotesPath} must point to a markdown file in commit ${targetSha}.`);
+                return;
+              }
+            }
+
+            core.setOutput('target_sha', targetSha);
+            core.setOutput('stable_tag', stableTag);
+            core.setOutput('release_name', `Key Magic ${stableVersion}`);
+            core.setOutput('release_notes_path', releaseNotesPath);
+
+  release:
+    needs: verify-source
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout promoted commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.verify-source.outputs.target_sha }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: src/KeyMagic.Web/package.json
+
+      - name: Install frontend dependencies
+        working-directory: src/KeyMagic.Web
+        run: bun ci
+
+      - name: Build frontend
+        working-directory: src/KeyMagic.Web
+        run: bun run build
+
+      - name: Restore .NET dependencies
+        run: dotnet restore KeyMagic.sln --runtime win-x64 /p:SelfContained=true
+
+      - name: Build solution
+        run: dotnet build KeyMagic.sln --configuration Release --no-restore /p:Version=${{ inputs.stable_version }}
+
+      - name: Publish service
+        run: dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/service/win-x64 --no-restore /p:Version=${{ inputs.stable_version }} /p:PublishSingleFile=true
+
+      - name: Assert single-file release asset
+        shell: pwsh
+        run: ./scripts/assert-portable-publish-assets.ps1 -ServicePublishDir artifacts/release/service/win-x64
+
+      - name: Sign release artifact when certificate is configured
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+          WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+          WINDOWS_SIGNING_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}
+        run: ./scripts/sign-windows-artifact.ps1 -ArtifactPath artifacts/release/service/win-x64/KeyMagic.exe
+
+      - name: Generate release checksum
+        shell: pwsh
+        run: |
+          $checksum = Get-FileHash artifacts/release/service/win-x64/KeyMagic.exe -Algorithm SHA256
+          "$($checksum.Hash.ToLowerInvariant()) *KeyMagic.exe" | Set-Content artifacts/release/service/win-x64/KeyMagic.exe.sha256 -NoNewline
+
+      - name: Upload stable release artifacts to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: keymagic-stable-${{ inputs.stable_version }}
+          path: |
+            artifacts/release/service/win-x64/KeyMagic.exe
+            artifacts/release/service/win-x64/KeyMagic.exe.sha256
+          retention-days: 90
+
+      - name: Attest stable release artifacts
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            artifacts/release/service/win-x64/KeyMagic.exe
+            artifacts/release/service/win-x64/KeyMagic.exe.sha256
+          create-storage-record: true
+
+      - name: Create GitHub release with override notes
+        if: ${{ needs.verify-source.outputs.release_notes_path != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.verify-source.outputs.stable_tag }}
+          name: ${{ needs.verify-source.outputs.release_name }}
+          body_path: ${{ needs.verify-source.outputs.release_notes_path }}
+          target_commitish: ${{ needs.verify-source.outputs.target_sha }}
+          prerelease: false
+          make_latest: true
+          files: |
+            artifacts/release/service/win-x64/KeyMagic.exe
+            artifacts/release/service/win-x64/KeyMagic.exe.sha256
+
+      - name: Create GitHub release with generated notes
+        if: ${{ needs.verify-source.outputs.release_notes_path == '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.verify-source.outputs.stable_tag }}
+          name: ${{ needs.verify-source.outputs.release_name }}
+          generate_release_notes: true
+          target_commitish: ${{ needs.verify-source.outputs.target_sha }}
+          prerelease: false
+          make_latest: true
+          files: |
+            artifacts/release/service/win-x64/KeyMagic.exe
+            artifacts/release/service/win-x64/KeyMagic.exe.sha256

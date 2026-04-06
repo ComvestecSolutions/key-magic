@@ -31,7 +31,12 @@ public class ConfigStore
     {
         _configPath = configPath ?? GetDefaultConfigPath();
         _logger = logger;
-        _config = Load();
+        var loadedConfig = Load();
+        _config = loadedConfig ?? CreateDefaultConfig();
+        if (loadedConfig == null)
+        {
+            Save();
+        }
     }
 
     public KeyMagicConfig Config
@@ -60,7 +65,7 @@ public class ConfigStore
         KeyMagicConfig snapshot;
         lock (_lock)
         {
-            _config = Load();
+            _config = Load() ?? CreateDefaultConfig();
             snapshot = _config.Clone();
         }
         ConfigChanged?.Invoke(snapshot);
@@ -182,14 +187,11 @@ public class ConfigStore
         return newState;
     }
 
-    private KeyMagicConfig Load()
+    private KeyMagicConfig? Load()
     {
         if (!File.Exists(_configPath))
         {
-            var config = CreateDefaultConfig();
-            _config = config;
-            Save();
-            return config;
+            return null;
         }
 
         try
@@ -226,7 +228,13 @@ public class ConfigStore
         {
             if (File.Exists(_configPath))
             {
-                File.Replace(tempPath, _configPath, null);
+                var backupPath = _configPath + ".bak";
+                if (File.Exists(backupPath))
+                {
+                    File.Delete(backupPath);
+                }
+
+                File.Replace(tempPath, _configPath, backupPath);
             }
             else
             {
@@ -248,7 +256,7 @@ public class ConfigStore
 
         config.Rules ??= defaults.Rules.Select(rule => rule.Clone()).ToList();
         config.Profiles ??= defaults.Profiles.ToDictionary(entry => entry.Key, entry => new List<string>(entry.Value));
-        config.TypingRules ??= new List<TypingRule>();
+        config.TypingRules ??= defaults.TypingRules.Select(rule => rule.Clone()).ToList();
         config.ActiveProfile ??= defaults.ActiveProfile;
 
         return config;

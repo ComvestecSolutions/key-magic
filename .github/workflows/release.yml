@@ -1,4 +1,4 @@
-name: Release
+name: Mainline Release Validation
 
 on:
   push:
@@ -58,7 +58,9 @@ jobs:
     needs: verify-merge
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: read
+      attestations: write
+      id-token: write
 
     steps:
       - name: Checkout
@@ -82,17 +84,16 @@ jobs:
 
           $releaseVersion = "$baseVersion-ci.${{ github.run_number }}"
           $shortSha = '${{ github.sha }}'.Substring(0, 7)
-          $releaseNotes = "Automated prerelease from merged PR #${env:PR_NUMBER}: $env:PR_TITLE ($shortSha)."
+          $releaseNotes = "Automated mainline validation build from merged PR #${env:PR_NUMBER}: $env:PR_TITLE ($shortSha)."
 
           "release_version=$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "tag_name=v$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "release_name=Mainline $releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "release_notes=$releaseNotes" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "artifact_name=keymagic-release-$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "summary_note=$releaseNotes" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.201
+          dotnet-version: 10.0.x
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -114,40 +115,52 @@ jobs:
         run: dotnet build KeyMagic.sln --configuration Release --no-restore /p:Version=${{ steps.version.outputs.release_version }}
 
       - name: Publish service
-        run: dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/service/win-x64 --no-restore /p:Version=${{ steps.version.outputs.release_version }}
+        run: dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/service/win-x64 --no-restore /p:Version=${{ steps.version.outputs.release_version }} /p:PublishSingleFile=true
 
-      - name: Publish tester
-        run: dotnet publish src/KeyMagic.Tester/KeyMagic.Tester.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/tester/win-x64 --no-restore /p:Version=${{ steps.version.outputs.release_version }}
-
-      - name: Create service zip
+      - name: Assert single-file release asset
         shell: pwsh
-        run: Compress-Archive -Path artifacts/release/service/win-x64/* -DestinationPath artifacts/release/KeyMagic-win-x64-portable.zip -Force
+        run: ./scripts/assert-portable-publish-assets.ps1 -ServicePublishDir artifacts/release/service/win-x64
 
-      - name: Create tester zip
+      - name: Sign release artifact when certificate is configured
         shell: pwsh
-        run: Compress-Archive -Path artifacts/release/tester/win-x64/* -DestinationPath artifacts/release/KeyMagic.Tester-win-x64.zip -Force
+        env:
+          WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+          WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+          WINDOWS_SIGNING_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}
+        run: ./scripts/sign-windows-artifact.ps1 -ArtifactPath artifacts/release/service/win-x64/KeyMagic.exe
+
+      - name: Generate release checksum
+        shell: pwsh
+        run: |
+          $checksum = Get-FileHash artifacts/release/service/win-x64/KeyMagic.exe -Algorithm SHA256
+          "$($checksum.Hash.ToLowerInvariant()) *KeyMagic.exe" | Set-Content artifacts/release/service/win-x64/KeyMagic.exe.sha256 -NoNewline
 
       - name: Upload release artifacts to workflow
         uses: actions/upload-artifact@v4
         with:
-          name: keymagic-release-${{ steps.version.outputs.release_version }}
+          name: ${{ steps.version.outputs.artifact_name }}
           path: |
-            artifacts/release/service/win-x64
-            artifacts/release/tester/win-x64
-            artifacts/release/KeyMagic-win-x64-portable.zip
-            artifacts/release/KeyMagic.Tester-win-x64.zip
+            artifacts/release/service/win-x64/KeyMagic.exe
+            artifacts/release/service/win-x64/KeyMagic.exe.sha256
           retention-days: 90
 
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+      - name: Attest release artifacts
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest@v4
         with:
-          tag_name: ${{ steps.version.outputs.tag_name }}
-          name: ${{ steps.version.outputs.release_name }}
-          body: ${{ steps.version.outputs.release_notes }}
-          target_commitish: ${{ github.sha }}
-          prerelease: true
-          generate_release_notes: true
-          make_latest: false
-          files: |
-            artifacts/release/KeyMagic-win-x64-portable.zip
-            artifacts/release/KeyMagic.Tester-win-x64.zip
+          subject-path: |
+            artifacts/release/service/win-x64/KeyMagic.exe
+            artifacts/release/service/win-x64/KeyMagic.exe.sha256
+          create-storage-record: false
+
+      - name: Write validation summary
+        shell: pwsh
+        run: |
+          @"
+          ## Mainline release candidate
+
+          - Candidate version: ${{ steps.version.outputs.release_version }}
+          - Workflow artifact: ${{ steps.version.outputs.artifact_name }}
+          - Source: ${{ steps.version.outputs.summary_note }}
+          - Public GitHub downloads are created only by the Stable Release workflow.
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
