@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+tone_instructions: >-
+  Provide architectural insights on the Windows keyboard pipeline, desktop-hosted local API, React
+  dashboard, and release pipeline. Prioritize maintainability, operational safety, security
+  boundaries, and artifact correctness over cosmetic feedback.
+reviews:
+  profile: assertive
+  high_level_summary_in_walkthrough: true
+  review_details: true
+  path_instructions:
+    - path: src/KeyMagic.Web/src/**/*.ts
+      instructions: >-
+        Focus on frontend module boundaries, API client contract drift against the localhost ASP.NET
+        Core API, shared state flow, polling and refresh behavior, and whether changes preserve the
+        desktop-hosted local-only operating model.
+    - path: src/KeyMagic.Web/src/**/*.tsx
+      instructions: >-
+        Focus on feature isolation, state ownership, shared component abstraction quality, and
+        whether the UI still supports the operational workflows for status, rules, typing, events,
+        and settings without increasing coupling.
+    - path: src/KeyMagic.Core/**/*.cs
+      instructions: >-
+        Focus on low-level keyboard interception correctness, Win32 interop safety, thread affinity,
+        hotkey registration lifetime, config snapshotting, and whether observability and blocking
+        semantics stay clearly separated.
+    - path: src/KeyMagic.Service/**/*.cs
+      instructions: >-
+        Focus on runtime composition, tray host and web dashboard lifecycle, localhost-only security
+        boundaries, admin-token and CORS enforcement, frontend asset resolution, and release-time
+        behavior such as embedded assets and single-file hosting implications.
+    - path: src/KeyMagic.Tester/**/*.cs
+      instructions: >-
+        Focus on whether tester behavior remains a diagnostic aid rather than becoming an accidental
+        product dependency, and whether it still reflects the same keyboard pipeline assumptions as
+        the main runtime.
+    - path: src/**/*.csproj
+      instructions: >-
+        Focus on publish model consistency, embedded asset behavior, self-contained and single-file
+        settings, and whether project-level changes create divergence between local builds, CI
+        validation, and stable release output.
+    - path: **/Directory.Build.props
+      instructions: >-
+        Focus on centralized versioning, deterministic build settings, release-debug symbol
+        strategy, and whether build metadata changes remain consistent across the solution and
+        GitHub Actions workflows.
+    - path: .github/workflows/**/*.yml
+      instructions: >-
+        Focus on release safety, least-privilege permissions, reproducibility from validated main
+        commits, single-file artifact guarantees, signing and provenance flow, and whether stable
+        promotion remains hard to misuse.
+    - path: scripts/**/*.ps1
+      instructions: >-
+        Focus on signing and validation automation safety, secret handling, idempotency, Windows
+        runner compatibility, and whether failure modes are explicit and operationally safe.
+    - path: docs/**/*.md
+      instructions: >-
+        Focus on whether architecture, release, and contributor documentation stay aligned with the
+        implemented runtime split, artifact contract, and promotion workflow.

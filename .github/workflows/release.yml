@@ -1,0 +1,166 @@
+name: Mainline Release Validation
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  verify-merge:
+    runs-on: ubuntu-latest
+
+    outputs:
+      pr_number: ${{ steps.pr.outputs.number }}
+      pr_title: ${{ steps.pr.outputs.title }}
+
+    steps:
+      - name: Verify commit came from merged pull request
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data: pulls } = await github.request('GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls', {
+              owner,
+              repo,
+              commit_sha: context.sha,
+              headers: {
+                accept: 'application/vnd.github+json'
+              }
+            });
+
+            const mergedMainPulls = pulls.filter(
+              (pull) => pull.base.ref === 'main' && pull.merged_at
+            );
+            const mergedPull =
+              mergedMainPulls.find((pull) => pull.merge_commit_sha === context.sha) ??
+              mergedMainPulls
+                .sort((a, b) => Date.parse(b.merged_at) - Date.parse(a.merged_at))[0];
+
+            if (!mergedPull) {
+              core.setFailed(`Commit ${context.sha} is not associated with a merged pull request into main.`);
+              return;
+            }
+
+            core.info(`Preparing release for merged PR #${mergedPull.number}: ${mergedPull.title}`);
+            core.setOutput('number', String(mergedPull.number));
+            core.setOutput('title', mergedPull.title);
+
+  release:
+    needs: verify-merge
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version metadata
+        id: version
+        shell: pwsh
+        env:
+          PR_NUMBER: ${{ needs.verify-merge.outputs.pr_number }}
+          PR_TITLE: ${{ needs.verify-merge.outputs.pr_title }}
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $baseVersion = $props.Project.PropertyGroup.VersionPrefix
+
+          if ([string]::IsNullOrWhiteSpace($baseVersion)) {
+            throw 'VersionPrefix was not found in Directory.Build.props.'
+          }
+
+          $releaseVersion = "$baseVersion-ci.${{ github.run_number }}"
+          $shortSha = '${{ github.sha }}'.Substring(0, 7)
+          $releaseNotes = "Automated mainline validation build from merged PR #${env:PR_NUMBER}: $env:PR_TITLE ($shortSha)."
+
+          "release_version=$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "artifact_name=keymagic-release-$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "summary_note=$releaseNotes" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: src/KeyMagic.Web/package.json
+
+      - name: Install frontend dependencies
+        working-directory: src/KeyMagic.Web
+        run: bun ci
+
+      - name: Build frontend
+        working-directory: src/KeyMagic.Web
+        run: bun run build
+
+      - name: Restore .NET dependencies
+        run: dotnet restore KeyMagic.sln --runtime win-x64 /p:SelfContained=true
+
+      - name: Build solution
+        run: dotnet build KeyMagic.sln --configuration Release --no-restore /p:Version=${{ steps.version.outputs.release_version }}
+
+      - name: Publish service
+        run: dotnet publish src/KeyMagic.Service/KeyMagic.Service.csproj --configuration Release --runtime win-x64 --self-contained --output artifacts/release/service/win-x64 --no-restore /p:Version=${{ steps.version.outputs.release_version }} /p:PublishSingleFile=true
+
+      - name: Assert single-file release asset
+        shell: pwsh
+        run: ./scripts/assert-portable-publish-assets.ps1 -ServicePublishDir artifacts/release/service/win-x64
+
+      - name: Sign release artifact when certificate is configured
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+          WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+          WINDOWS_SIGNING_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}
+        run: ./scripts/sign-windows-artifact.ps1 -ArtifactPath artifacts/release/service/win-x64/KeyMagic.exe
+
+      - name: Generate release checksum
+        shell: pwsh
+        run: |
+          $checksum = Get-FileHash artifacts/release/service/win-x64/KeyMagic.exe -Algorithm SHA256
+          "$($checksum.Hash.ToLowerInvariant()) *KeyMagic.exe" | Set-Content artifacts/release/service/win-x64/KeyMagic.exe.sha256 -NoNewline
+
+      - name: Upload release artifacts to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.artifact_name }}
+          path: |
+            artifacts/release/service/win-x64/KeyMagic.exe
+            artifacts/release/service/win-x64/KeyMagic.exe.sha256
+          retention-days: 90
+
+      - name: Attest release artifacts
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            artifacts/release/service/win-x64/KeyMagic.exe
+            artifacts/release/service/win-x64/KeyMagic.exe.sha256
+          create-storage-record: false
+
+      - name: Write validation summary
+        shell: pwsh
+        run: |
+          @"
+          ## Mainline release candidate
+
+          - Candidate version: ${{ steps.version.outputs.release_version }}
+          - Workflow artifact: ${{ steps.version.outputs.artifact_name }}
+          - Source: ${{ steps.version.outputs.summary_note }}
+          - Public GitHub downloads are created only by the Stable Release workflow.
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
