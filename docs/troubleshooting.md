@@ -7,6 +7,13 @@
 - The dashboard is local-only. Open it from the same machine where Key Magic is running.
 - If another process already uses the configured port, stop Key Magic, choose a free port in config or settings, and then start the app again.
 
+## App exits before the tray icon appears
+
+- Check `%APPDATA%\KeyMagic\logs\startup.log` for the last startup step and any captured exception details.
+- If a GitHub-downloaded release shows an Unknown Publisher warning, that is a signing trust warning. If Windows still lets the app run and Key Magic exits, treat the problem as startup failure instead.
+- If another process already uses the configured dashboard port, Key Magic now records that failure and continues without the local dashboard. Use the startup log to confirm whether the dashboard was disabled for the current session.
+- If the app still exits immediately, delete or rename `%APPDATA%\KeyMagic\config.json`, start Key Magic again, and then compare the new startup log with the previous run.
+
 ## A shortcut rule does not block
 
 - Protection must be resumed. Check the tray menu or status view for the current global state.
