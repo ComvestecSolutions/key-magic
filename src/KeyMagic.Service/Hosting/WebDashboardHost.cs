@@ -22,6 +22,8 @@ internal static class WebDashboardHost
         var port = configStore.Config.WebDashboardPort;
         var frontendAssets = FrontendAssetLocator.Resolve();
 
+        StartupDiagnostics.Record($"Preparing local dashboard host on localhost:{port}.");
+
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             ContentRootPath = AppContext.BaseDirectory,
@@ -89,19 +91,23 @@ internal static class WebDashboardHost
             if (frontendAssets.PhysicalRootPath is not null)
             {
                 startupLogger.LogInformation("Serving dashboard assets from {Source} at {Path}", frontendAssets.Source, frontendAssets.PhysicalRootPath);
+                StartupDiagnostics.Record($"Dashboard assets resolved from {frontendAssets.Source} at {frontendAssets.PhysicalRootPath}.");
             }
             else
             {
                 startupLogger.LogInformation("Serving dashboard assets from {Source} bundled inside KeyMagic.exe", frontendAssets.Source);
+                StartupDiagnostics.Record($"Dashboard assets resolved from {frontendAssets.Source} bundled inside KeyMagic.exe.");
             }
         }
         else
         {
             startupLogger.LogWarning("No dashboard assets were found. The API will start without a web UI.");
+            StartupDiagnostics.Record("No dashboard assets were found. The API will start without a web UI.");
         }
         app.Start();
 
         startupLogger.LogInformation("KeyMagic dashboard: http://localhost:{Port}", port);
+        StartupDiagnostics.Record($"Dashboard host started on http://localhost:{port}.");
         return app;
     }
 

@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using KeyMagic.Core.Configuration;
 using KeyMagic.Core.Models;
 using KeyMagic.Core.Services;
+using KeyMagic.Service.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace KeyMagic.Service.Tray;
@@ -17,6 +18,7 @@ public class TrayIconManager : IDisposable
     private readonly ConfigStore _configStore;
     private readonly ShortcutBlockingService _blockingService;
     private readonly int _dashboardPort;
+    private readonly bool _dashboardAvailable;
     private readonly ILogger<TrayIconManager>? _logger;
     private readonly Image _brandMenuIcon;
     private readonly Image _dashboardMenuIcon;
@@ -33,11 +35,16 @@ public class TrayIconManager : IDisposable
     private readonly Image _inactiveTypingMenuIcon;
     private bool _disposed;
 
-    public TrayIconManager(ConfigStore configStore, ShortcutBlockingService blockingService, ILogger<TrayIconManager>? logger = null)
+    public TrayIconManager(
+        ConfigStore configStore,
+        ShortcutBlockingService blockingService,
+        bool dashboardAvailable = true,
+        ILogger<TrayIconManager>? logger = null)
     {
         _configStore = configStore;
         _blockingService = blockingService;
         _dashboardPort = configStore.Config.WebDashboardPort;
+        _dashboardAvailable = dashboardAvailable;
         _logger = logger;
         _uiInvoker = new Control();
         _ = _uiInvoker.Handle;
@@ -164,12 +171,15 @@ public class TrayIconManager : IDisposable
         menu.Items.Add(toggleItem);
 
         // ── Open dashboard ──
-        var dashboardItem = new ToolStripMenuItem("Open dashboard")
+        var dashboardItem = new ToolStripMenuItem(_dashboardAvailable ? "Open dashboard" : "Dashboard unavailable")
         {
             Font = new Font("Segoe UI", 9.5f),
-            ForeColor = Color.FromArgb(6, 182, 212),        // --cyan
+            ForeColor = _dashboardAvailable
+                ? Color.FromArgb(6, 182, 212)                // --cyan
+                : Color.FromArgb(107, 115, 148),
             Padding = new Padding(4, 6, 4, 6),
-            Image = CloneMenuIcon(_dashboardMenuIcon)
+            Image = CloneMenuIcon(_dashboardMenuIcon),
+            Enabled = _dashboardAvailable
         };
         dashboardItem.Click += (_, _) => OpenDashboard();
         menu.Items.Add(dashboardItem);
@@ -432,6 +442,17 @@ public class TrayIconManager : IDisposable
 
     private void OpenDashboard()
     {
+        if (!_dashboardAvailable)
+        {
+            _logger?.LogWarning("Dashboard launch requested, but the local dashboard is unavailable for this session");
+            MessageBox.Show(
+                StartupDiagnostics.BuildDashboardUnavailableMessage(),
+                "KeyMagic dashboard unavailable",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
         try
         {
             var psi = new System.Diagnostics.ProcessStartInfo
